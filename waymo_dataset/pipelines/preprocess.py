@@ -18,7 +18,6 @@ def drop_arrays_by_name(gt_names, used_classes):
 
 class Preprocess(object):
     def __init__(self, cfg=None, **kwargs):
-        print(cfg)
         self.shuffle_points = cfg.shuffle_points
         self.min_points_in_gt = cfg.get("min_points_in_gt", -1)
         

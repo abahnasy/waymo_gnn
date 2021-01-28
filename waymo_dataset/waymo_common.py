@@ -309,8 +309,16 @@ def get_available_frames(root, split):
     return sorted_frames
 
 
-def create_waymo_infos(root_path, split='train', nsweeps=1):
+def create_waymo_infos(root_path, split='train', nsweeps=1, sub_sampled = None):
     frames = get_available_frames(root_path, split)
+    if sub_sampled is not None:
+        new_len = len(frames)*sub_sampled
+        factor = len(frames)/new_len
+        new_frames = []
+        for i in range(len(frames)):
+            if i%factor == 0:
+                new_frames.append(frames[i])
+        frames = new_frames
 
     waymo_infos = _fill_infos(
         root_path, frames, split, nsweeps

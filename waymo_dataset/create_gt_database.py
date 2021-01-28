@@ -3,16 +3,16 @@ from pathlib import Path
 import os 
 import numpy as np
 
-from ..utils import box_np_ops
+from utils.bbox import box_np_ops
 from .dataset_factory import get_dataset
 from tqdm import tqdm
 
-dataset_name_map = {
-    "NUSC": "NuScenesDataset",
-    "WAYMO": "WaymoDataset"
-}
-
-
+# dataset_name_map = {
+#     "NUSC": "NuScenesDataset",
+#     "WAYMO": "WaymoDataset"
+# }
+from waymo_dataset.pipelines.loading import LoadPointCloudFromFile, LoadPointCloudAnnotations
+dataset_type = "WaymoDataset"
 def create_groundtruth_database(
     dataset_class_name,
     data_path,
@@ -24,11 +24,8 @@ def create_groundtruth_database(
     **kwargs,
 ):
     pipeline = [
-        {
-            "type": "LoadPointCloudFromFile",
-            "dataset": dataset_name_map[dataset_class_name],
-        },
-        {"type": "LoadPointCloudAnnotations", "with_bbox": True},
+            LoadPointCloudFromFile(dataset=dataset_type),
+            LoadPointCloudAnnotations(with_bbox=True),
     ]
 
     if "nsweeps" in kwargs:

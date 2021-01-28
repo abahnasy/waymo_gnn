@@ -9,13 +9,13 @@ MAIN_DIR = os.path.join(BASE_DIR, '..')
 sys.path.append(MAIN_DIR)
 
 
-from .create_gt_database import create_groundtruth_database
-from .waymo_common import create_waymo_infos
+from waymo_dataset.create_gt_database import create_groundtruth_database
+from waymo_dataset.waymo_common import create_waymo_infos
 
 
 
-def waymo_data_prep(root_path, split, nsweeps=1):
-    create_waymo_infos(root_path, split=split, nsweeps=nsweeps)
+def waymo_data_prep(root_path, split, nsweeps=1, sub_sampled=None):
+    create_waymo_infos(root_path, split=split, nsweeps=nsweeps, sub_sampled=sub_sampled)
     if split == 'train': 
         create_groundtruth_database(
             "WAYMO",

@@ -29,6 +29,7 @@ from pathlib import Path
 from collections import OrderedDict
 
 from utils.log_buffer import LogBuffer
+from utils.checkpoint import load_checkpoint, save_checkpoint
 
 def get_timestamp():
     return time.strftime("%Y%m%d_%H%M%S", time.localtime())
@@ -78,6 +79,9 @@ def parse_args():
     parser.add_argument("--resume_from", help="the checkpoint file to resume from")
     parser.add_argument("--dry_run", help="execute one pass to make sure everyting is ok !")
     parser.add_argument(
+        "--checkpoint", help="the dir to checkpoint which the model read from"
+    )
+    parser.add_argument(
         "--validate",
         action="store_true",
         help="whether to evaluate the checkpoint during training",
@@ -97,21 +101,16 @@ def main():
     # cfg = Config.fromfile(args.config)
 
 
-    if args.work_dir is not None:
-        pass
-        # cfg.work_dir = args.work_dir
-    if args.resume_from is not None:
-        pass
-        # cfg.resume_from = args.resume_from
+   
 
-    
+
     
     
     
     
     # ============================ Configurarions section ================================= #
     # TODO: move to external cfg file
-    tasks = [
+    tasks = [ # TODO: Remove tasks style
         dict(num_class=3, class_names=['VEHICLE', 'PEDESTRIAN', 'CYCLIST']),
     ]
     class_names = list(itertools.chain(*[t["class_names"] for t in tasks]))    
@@ -186,6 +185,10 @@ def main():
         db_sampler=None, # TODO: set to None due to error in sample_all()
         class_names=class_names,
     )
+    val_preprocessor = dict(
+        mode="val",
+        shuffle_points=False,
+    )
     voxel_generator = dict(
         range=[-75.2, -75.2, -2, 75.2, 75.2, 4],
         voxel_size=[0.1, 0.1, 0.15],
@@ -235,13 +238,23 @@ def main():
         AssignLabel(cfg=Config(train_cfg["assigner"])),
         Reformat()
     ]
+
+    test_pipeline = [
+        LoadPointCloudFromFile(dataset=dataset_type),
+        LoadPointCloudAnnotations(with_bbox=True),
+        Preprocess(cfg=Config(val_preprocessor)),
+        Voxelization(cfg=Config(voxel_generator)),
+        AssignLabel(cfg=Config(train_cfg["assigner"])),
+        Reformat()
+    ]
+
     data_root = "data/Waymo"
     nsweeps = 1
     train_anno = "data/Waymo/infos_train_01sweeps_filter_zero_gt.pkl"
     val_anno = "data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl"
     test_anno = None
 
-    cfg_total_epochs = 3
+    cfg_total_epochs = 36
     cfg_samples_per_gpu=2
     cfg_workers_per_gpu=2
 
@@ -263,10 +276,17 @@ def main():
     Path(working_dir).mkdir(parents=True, exist_ok=True)
     logger = get_root_logger(working_dir)
     
+    
+    
     # set random seeds
     if args.seed is not None:
         logger.info("Set random seed to {}".format(args.seed))
         set_random_seed(args.seed)
+
+    if args.work_dir is not None:
+        pass
+        # cfg.work_dir = args.work_dir
+    
 
     ds = WaymoDataset(
         info_path = train_anno,
@@ -299,11 +319,37 @@ def main():
         # pin_memory=True,
         pin_memory=False,
     )
+    print("dataloader", len(data_loader.dataset))
 
     
     total_steps = cfg_total_epochs * len(data_loader)
 
+    # =========== build val dataset ===========
+    val_ds = WaymoDataset(
+        root_path=data_root,
+        info_path=val_anno,
+        test_mode=True,
+        ann_file=val_anno,
+        nsweeps=nsweeps,
+        class_names=class_names,
+        pipeline=train_pipeline, #TODO: fix this later, temp use of train pipeline !
+    )
+    print(len(val_ds))
+    
 
+
+    # data loader 
+    val_data_loader = DataLoader(
+        val_ds,
+        batch_size=8,
+        sampler=sampler,
+        shuffle=False,
+        num_workers=8,
+        collate_fn=collate_kitti,
+        # pin_memory=True,
+        pin_memory=False,
+    )
+    print("datalaoder", len(val_data_loader.dataset))
     # build detector
     # build backbone, reader, necks and bbox_heads
     model = Config(model)
@@ -318,6 +364,7 @@ def main():
         pretrained=None,
     )
     model.CLASSES = ds.CLASSES
+
 
     
 
@@ -347,8 +394,12 @@ def main():
     # TODO: handle load from
 
     
-    trainer = Trainer(model, optimizer, lr_scheduler, working_dir, logger, args, cfg_optimizer_config)
-    trainer.run(data_loader=data_loader, max_epochs=cfg_total_epochs)
+        
+        
+    trainer = Trainer(model, optimizer, lr_scheduler, working_dir, logger, args, cfg_optimizer_config, enable_tf_viz=True)
+    if args.resume_from is not None:
+        trainer.resume(os.path.join(args.resume_from))
+    trainer.run(train_data_loader=data_loader, val_data_loader= val_data_loader, max_epochs=cfg_total_epochs)
     
 
 
@@ -363,7 +414,8 @@ class Trainer():
         wokring_dir,
         logger,
         run_args,
-        optimizer_config
+        optimizer_config,
+        enable_tf_viz=False
         ):
         self.model = model
         self.optimizer = optimizer
@@ -375,6 +427,15 @@ class Trainer():
         if not os.path.exists(wokring_dir):
             raise ValueError('Not a valid working dir')
         self.working_dir = wokring_dir
+
+        # TFBoard 
+        log_dir = os.path.join(self.working_dir, 'tf_logs')
+        Path(log_dir).mkdir(parents=True, exist_ok=True)
+        from utils.tf_visualizer import Visualizer as TfVisualizer
+        self.enable_tf_viz = enable_tf_viz
+        self.tf_viz_train = TfVisualizer(log_dir, 'train') # logging every epoch
+        self.tf_viz_val = TfVisualizer(log_dir, 'val') # logging every batch
+        # note: append prefix epoch_ or batch_ to distinguish between batch and epoch values
         
 
         
@@ -394,6 +455,7 @@ class Trainer():
         self._inner_iter = 0
         self._max_epochs = 0
         self._max_iters = 0
+        self._timers = {} # Epoch Timer, Iter Timer, Data Transfer Timer
 
         # hooks definitions
         from trainer_utils import TextLoggerHook
@@ -407,8 +469,17 @@ class Trainer():
     def __call__(self):
         pass
 
-    
-    def run(self, data_loader, max_epochs):
+    def resume(self, checkpoint, resume_optimizer=True, map_location="default"):
+        checkpoint = load_checkpoint(self.model, checkpoint)
+
+        self._epoch = checkpoint["meta"]["epoch"]
+        self._iter = checkpoint["meta"]["iter"]
+        if "optimizer" in checkpoint and resume_optimizer:
+            self.optimizer.load_state_dict(checkpoint["optimizer"])
+
+        self.logger.info("resumed epoch %d, iter %d", self._epoch, self._iter)
+
+    def run(self, train_data_loader, val_data_loader, max_epochs):
         self._max_epochs = max_epochs
         if self.working_dir is None:
             raise ValueError('where is working dir?!')
@@ -419,8 +490,13 @@ class Trainer():
         self.text_logger.before_run(self)
 
         for epoch in range(self._max_epochs):
-            self.train(data_loader, epoch)
-            self.val()
+            self._timers['train_epoch'] = time.time()
+            self.train(train_data_loader, epoch)
+            self._timers['train_epoch'] = time.time() - self._timers['train_epoch']
+            
+            if self.enable_tf_viz:
+                self.tf_viz_train.log_scalar('epoch_time', self._timers['train_epoch'], self._epoch) 
+            self.val(val_data_loader, epoch)
         # after_run
         
 
@@ -438,7 +514,8 @@ class Trainer():
         # before train epoch
         self.t = time.time()
         self.text_logger.before_epoch(self)
-
+        
+        total_log_vars = OrderedDict()
         for i, batch_data in enumerate(data_loader):
             global_step = base_step + i
             self._inner_iter = i
@@ -478,6 +555,7 @@ class Trainer():
                     # "cyv_coordinates",
                     # "cyv_num_points",
                 ]:
+                    if k == 'points': continue #DEBUG: skip loading points to gpu, not needed
                     batch_data_tensor[k] = v.to(device) # move single items
                 else:
                     batch_data_tensor[k] = v # keep the rest on cpu
@@ -485,18 +563,28 @@ class Trainer():
                 # after_data_to_device
                 self.log_buffer.update({"transfer_time": time.time() - self.t})
 
-            
+            # model.forward() does the loss calculations
             losses = self.model(batch_data_tensor, return_loss=True)
             # after_forward
             self.log_buffer.update({"forward_time": time.time() - self.t})
 
             log_vars = OrderedDict()
             loss = sum(losses["loss"])
+            # self.tf_viz_train.log_scalar('batch_loss', loss.detach().cpu().numpy(), self._iter)
+            
             for loss_name, loss_value in losses.items():
                 if loss_name == "loc_loss_elem":
                     log_vars[loss_name] = [[i.item() for i in j] for j in loss_value]
                 else:
                     log_vars[loss_name] = [i.item() for i in loss_value]
+                    if self.enable_tf_viz:
+                        if len(loss_value) == 1:
+                            if not loss_name in total_log_vars.keys():
+                                total_log_vars[loss_name] = 0
+                            total_log_vars[loss_name] += loss_value[0].detach().cpu().numpy()
+                            self.tf_viz_train.log_scalar('batch_{}'.format(loss_name), loss_value[0].detach().cpu().numpy(), self._iter)
+                        else:
+                            raise ValueError('weird length of the loss !!!')
             
             del losses
             outputs = dict(
@@ -504,7 +592,7 @@ class Trainer():
             )
             # after_parse_loss
             self.log_buffer.update({"loss_parse_time": time.time() - self.t})
-            
+
             if "log_vars" in outputs:
                 self.log_buffer.update(outputs["log_vars"], outputs["num_samples"])
             self.outputs = outputs
@@ -527,29 +615,34 @@ class Trainer():
                 exit()
         
         
-        self._epoch += 1 
-        # after_train_epoch
+        self._epoch += 1
+        # after_train_epoch 
         self.text_logger.after_train_epoch(self)
         meta = dict(epoch=self._epoch, iter=self._iter)
         save_checkpoint(self.working_dir, self.model, self.optimizer, meta)
+        # Log epoch info to tensor board
+        if self.enable_tf_viz:
+            for k, v in total_log_vars.items():
+                self.tf_viz_train.log_scalar('epoch_{}'.format(k), v/len(data_loader.dataset), self._epoch) 
     
     def val(self, data_loader, epoch):
         self.model.eval()
         self.mode = "val"
         self.data_loader = data_loader
-        self.logger.info(f"work dir: {self.work_dir}")
+        self.logger.info(f"work dir: {self.working_dir}")
         # before_val_epoch
         self.text_logger.before_epoch(self)
         
-        detections = {}
-        cpu_device = torch.device("cpu")
+        # detections = {}
+        # cpu_device = torch.device("cpu")
+        total_log_vars = OrderedDict()
         for i, batch_data in enumerate(data_loader):
             self._inner_iter = i
             # before_val_iter
             with torch.no_grad():
                 # move data to device
                 batch_data_tensor = {}
-                for k, v in batch_data.item(): 
+                for k, v in batch_data.items(): 
                     if k in [
                         # "anchors", 
                         # "anchors_mask", 
@@ -579,33 +672,56 @@ class Trainer():
                         batch_data_tensor[k] = v.to(device) # move single items
                     else:
                         batch_data_tensor[k] = v # keep the rest on cpu
-                        
-                    outputs = self.model(batch_data_tensor, return_loss=False)
-                    for output in outputs:
-                        token = output["metadata"]["token"]
-                        for k, v in output.items():
-                            if k not in [
-                                "metadata",
-                            ]:
-                                output[k] = v.to(cpu_device)
-                        detections.update(
-                            {token: output,}
-                        )
-                all_predictions = [detections]
-                predictions = {}
-                for p in all_predictions:
-                    predictions.update(p)
 
-                # run the evalutaion function implemented in the dataset class       
-                result_dict, _ = self.data_loader.dataset.evaluation(
-                    predictions, output_dir=self.work_dir
-                ) # TODO: not implemented !!!
-                self.logger.info("\n")
-                for k, v in result_dict["results"].items():
-                    self.logger.info(f"Evaluation {k}: {v}")
+                losses = self.model(batch_data_tensor, return_loss=True)
+                log_vars = OrderedDict()
+                loss = sum(losses["loss"])
+                
+                
+                for loss_name, loss_value in losses.items():
+                    if loss_name == "loc_loss_elem":
+                        # total_log_vars[loss_name] = [[i.item() for i in j] for j in loss_value]
+                        continue
+                    else:
+                        assert len([i for i in loss_value]) == 1, 'assertion for tensor board'
+                        if not loss_name in total_log_vars.keys():
+                            total_log_vars[loss_name] = 0
+                        total_log_vars[loss_name] += loss_value[0].detach().cpu().numpy()
+                        
+
+                      # TODO: mAP evaluation to be done later  
+                #     outputs = self.model(batch_data_tensor, return_loss=False)
+                #     for output in outputs:
+                #         token = output["metadata"]["token"]
+                #         for k, v in output.items():
+                #             if k not in [
+                #                 "metadata",
+                #             ]:
+                #                 output[k] = v.to(cpu_device)
+                #         detections.update(
+                #             {token: output,}
+                #         )
+                # all_predictions = [detections]
+                # predictions = {}
+                # for p in all_predictions:
+                #     predictions.update(p)
+
+                # # run the evalutaion function implemented in the dataset class       
+                # result_dict, _ = self.data_loader.dataset.evaluation(
+                #     predictions, output_dir=self.work_dir
+                # ) # TODO: not implemented !!!
+                # self.logger.info("\n")
+                # for k, v in result_dict["results"].items():
+                #     self.logger.info(f"Evaluation {k}: {v}")
 
                 # after_val_epoch
                 self.text_logger.after_val_epoch(self)
+                
+            
+        if self.enable_tf_viz:
+            for k, v in total_log_vars.items():
+                self.tf_viz_val.log_scalar('epoch_{}'.format(k), v/len(data_loader.dataset), self._epoch)
+
 
     def current_lr(self):
         if self.optimizer is None:
@@ -615,100 +731,10 @@ class Trainer():
 
 
 
-def weights_to_cpu(state_dict):
-    state_dict_cpu = OrderedDict()
-    for k, v in state_dict.items():
-        state_dict_cpu[k] = v.cpu()
-    return state_dict_cpu
 
 
 
-from terminaltables import AsciiTable
-def _load_state_dict(module, state_dict):
-    """Load state_dict into a module
-    """
-    unexpected_keys = []
-    shape_mismatch_pairs = []
 
-    own_state = module.state_dict()
-    for name, param in state_dict.items():
-        # a hacky fixed to load a new voxelnet 
-        if name not in own_state:
-            unexpected_keys.append(name)
-            continue
-        if isinstance(param, torch.nn.Parameter):
-            # backwards compatibility for serialized parameters
-            param = param.data
-        if param.size() != own_state[name].size():
-            shape_mismatch_pairs.append([name, own_state[name].size(), param.size()])
-            continue
-        own_state[name].copy_(param)
-
-    all_missing_keys = set(own_state.keys()) - set(state_dict.keys())
-    # ignore "num_batches_tracked" of BN layers
-    missing_keys = [key for key in all_missing_keys if "num_batches_tracked" not in key]
-
-    err_msg = []
-    if unexpected_keys:
-        err_msg.append(
-            "unexpected key in source state_dict: {}\n".format(
-                ", ".join(unexpected_keys)
-            )
-        )
-    if missing_keys:
-        err_msg.append(
-            "missing keys in source state_dict: {}\n".format(", ".join(missing_keys))
-        )
-    if shape_mismatch_pairs:
-        mismatch_info = "these keys have mismatched shape:\n"
-        header = ["key", "expected shape", "loaded shape"]
-        table_data = [header] + shape_mismatch_pairs
-        table = AsciiTable(table_data)
-        err_msg.append(mismatch_info + table.table)
-
-    
-    if len(err_msg) > 0:
-        err_msg.insert(0, "The model and loaded state dict do not match exactly\n")
-        err_msg = "\n".join(err_msg)
-        
-        raise RuntimeError(err_msg)
-
-
-def load_checkpoint(filename, model):
-    if not os.path.isfile(filename):
-            raise IOError("{} is not a checkpoint file".format(filename))
-    checkpoint = torch.load(filename)
-    
-    if isinstance(checkpoint, OrderedDict):
-        state_dict = checkpoint
-    elif isinstance(checkpoint, dict) and "state_dict" in checkpoint:
-        state_dict = checkpoint["state_dict"]
-    else:
-        raise RuntimeError("No state_dict found in checkpoint file {}".format(filename))
-
-    _load_state_dict(model, state_dict)
-
-def save_checkpoint(working_dir, model, optimizer, meta):
-    '''
-    meta = dict(epoch=self.epoch + 1, iter=self.iter)
-    '''
-
-    if not os.path.exists(working_dir):
-        raise NotADirectoryError
-
-    filename = 'epoch_{}.pth'.format(meta['epoch'])
-    filepath = os.path.join(working_dir, filename)
-    filelink = os.path.join(working_dir, 'latest.pth')
-    checkpoint = {
-        'meta': meta,
-        'state_dict': weights_to_cpu(model.state_dict()),
-        'optimizer': optimizer.state_dict()
-    }
-    torch.save(checkpoint, filepath)
-    # create symlink to the latest epoch
-    if os.path.lexists(filelink):
-        os.remove(filelink)
-    os.symlink(filepath, filelink)
 
 if __name__ == '__main__':
     

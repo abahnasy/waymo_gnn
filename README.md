@@ -81,12 +81,12 @@
 ## Not Important and Urgent
 
 ## Not Important and not Urgent
-- [ ] numba jit warning !
+- [x] numba jit warning ! (suppressed)
 - [ ] check Kornia, DGL libraries
 - [ ] refactor times by implementing a specific class !
 
 ## Backlog
-
+- [ ] implement the top view viz from matplotlib
 - [ ] add train option for mini dataset
 - [ ] remove multi task implememntation
 - [ ] change viz to mayavi `REF: https://github.com/DapengFeng/waymo-toolkit`

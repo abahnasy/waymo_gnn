@@ -49,7 +49,7 @@
 ```python3 ./tools/train.py CONFIG_PATH```
 
 # test cmds
-```python3 ./dist_test.py --work_dir work_dirs/dry_run --checkpoint work_dirs/dry_run/latest.pth --speed_test```
+```python3 ./test.py --work_dir work_dirs/dry_run --checkpoint work_dirs/dry_run/latest.pth --speed_test```
 
 # generate ground truth for validation set
 ```python3 waymo_open_dataset/waymo_common.py --info_path data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl --result_path data/Waymo/ --gt```
@@ -89,5 +89,9 @@
 - [ ] implement the top view viz from matplotlib
 - [ ] add train option for mini dataset
 - [ ] remove multi task implememntation
-- [ ] change viz to mayavi `REF: https://github.com/DapengFeng/waymo-toolkit`
+- [ ] ~~change viz to mayavi `REF: https://github.com/DapengFeng/waymo-toolkit`~~
 - [ ] in depth documentation `REF: https://github.com/Jossome/Waymo-open-dataset-document`
+
+# Acknowledgment
+* `https://github.com/poodarchu/Det3D`
+* `https://github.com/open-mmlab/mmdetection`

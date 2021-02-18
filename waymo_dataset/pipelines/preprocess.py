@@ -27,8 +27,33 @@ class Preprocess(object):
             self.global_scaling_noise = cfg.global_scale_noise
             self.class_names = cfg.class_names
             if cfg.db_sampler != None:
-                raise NotImplementedError # TODO: implement the builder !
-                self.db_sampler = build_dbsampler(cfg.db_sampler)
+                # print(cfg.db_sampler)
+                # raise NotImplementedError # TODO: implement the builder !
+                # self.db_sampler = build_dbsampler(cfg.db_sampler)
+                from utils.sampler.sample_ops import DataBaseSamplerV2
+                import pickle, logging
+                logger = logging.getLogger("build_dbsampler")
+                info_path = cfg.db_sampler.db_info_path
+                with open(info_path, "rb") as f:
+                    db_infos = pickle.load(f)
+                # build preprocessors
+                from utils.sampler.preprocess import DBFilterByDifficulty, DBFilterByMinNumPoint, DataBasePreprocessor
+                preprocessors = []    
+                if "filter_by_difficulty" in cfg.db_sampler.db_prep_steps:
+                    v = cfg.db_sampler.db_prep_steps["filter_by_difficulty"]
+                    preprocessors.append(DBFilterByDifficulty(v, logger=logger))
+                elif "filter_by_min_num_points" in cfg.db_sampler.db_prep_steps:
+                    v = cfg.db_sampler.db_prep_steps["filter_by_min_num_points"]
+                    preprocessors.append(DBFilterByMinNumPoint(v, logger=logger))
+                db_prepor = DataBasePreprocessor(preprocessors)
+                self.db_sampler = DataBaseSamplerV2(
+                    db_infos, 
+                    groups = cfg.db_sampler.sample_groups, 
+                    db_prepor = db_prepor, 
+                    rate = cfg.db_sampler.rate, 
+                    global_rot_range = cfg.db_sampler.global_random_rotation_range_per_object, 
+                    logger=logger
+                )
             else:
                 self.db_sampler = None 
                 

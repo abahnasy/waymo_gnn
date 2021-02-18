@@ -76,11 +76,11 @@ class WaymoDataset(Dataset):
                 "nsweeps": self.nsweeps, 
             },
             "metadata": {
-                "image_prefix": self._root_path,
+                "image_prefix": self._root_path, # TODO: refactor, used to get root path in dbsampler
                 "num_point_features": self._num_point_features,
                 "token": info["token"],
             },
-            "calib": None,
+            "calib": None, #TODO: remove param
             "cam": {},
             "mode": "val" if self.test_mode else "train",
             "type": "WaymoDataset",
@@ -93,7 +93,7 @@ class WaymoDataset(Dataset):
     def __getitem__(self, idx):
         return self.get_sensor_data(idx)
 
-    def evaluation(self, detections, output_dir=None, testset=False):
+    def evaluation(self, detections, output_dir=None):
         from .waymo_common import _create_pd_detection, reorganize_info
 
         infos = self._waymo_infos 

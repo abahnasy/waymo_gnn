@@ -31,7 +31,7 @@ class DataBaseSamplerV2:
 
         self.db_infos = db_infos
         self._rate = rate
-        self._groups = groups
+        # self._groups = groups
         self._group_db_infos = {}
         self._group_name_to_names = []
         self._sample_classes = []
@@ -46,6 +46,7 @@ class DataBaseSamplerV2:
                 self._sample_classes += group_names
                 self._sample_max_nums += list(group_info.values())
         else:
+            raise NotImplementedError
             for group_info in groups:
                 group_dict = {}
                 group_names = list(group_info.keys())
@@ -120,15 +121,16 @@ class DataBaseSamplerV2:
 
         sampled_groups = self._sample_classes
         if self._use_group_sampling:
-            assert gt_group_ids is not None
-            sampled_groups = []
-            sample_num_per_class = []
-            for group_name, class_names in self._group_name_to_names:
-                sampled_nums_group = [sampled_num_dict[n] for n in class_names]
-                sampled_num = np.max(sampled_nums_group)
-                sample_num_per_class.append(sampled_num)
-                sampled_groups.append(group_name)
-            total_group_ids = gt_group_ids
+            raise NotImplementedError
+            # assert gt_group_ids is not None
+            # sampled_groups = []
+            # sample_num_per_class = []
+            # for group_name, class_names in self._group_name_to_names:
+            #     sampled_nums_group = [sampled_num_dict[n] for n in class_names]
+            #     sampled_num = np.max(sampled_nums_group)
+            #     sample_num_per_class.append(sampled_num)
+            #     sampled_groups.append(group_name)
+            # total_group_ids = gt_group_ids
         sampled = []
         sampled_gt_boxes = []
         avoid_coll_boxes = gt_boxes
@@ -136,6 +138,7 @@ class DataBaseSamplerV2:
         for class_name, sampled_num in zip(sampled_groups, sample_num_per_class):
             if sampled_num > 0:
                 if self._use_group_sampling:
+                    raise NotImplementedError
                     sampled_cls = self.sample_group(
                         class_name, sampled_num, avoid_coll_boxes, total_group_ids
                     )
@@ -158,6 +161,7 @@ class DataBaseSamplerV2:
                         [avoid_coll_boxes, sampled_gt_box], axis=0
                     )
                     if self._use_group_sampling:
+                        raise NotImplementedError
                         if len(sampled_cls) == 1:
                             sampled_group_ids = np.array(sampled_cls[0]["group_id"])[
                                 np.newaxis, ...
@@ -218,6 +222,7 @@ class DataBaseSamplerV2:
                 "gt_masks": np.ones((num_sampled,), dtype=np.bool_),
             }
             if self._use_group_sampling:
+                raise NotImplementedError
                 ret["group_ids"] = np.array([s["group_id"] for s in sampled])
             else:
                 ret["group_ids"] = np.arange(
@@ -229,6 +234,7 @@ class DataBaseSamplerV2:
 
     def sample(self, name, num):
         if self._use_group_sampling:
+            raise NotImplementedError
             group_name = name
             ret = self._sampler_dict[group_name].sample(num)
             groups_num = [len(l) for l in ret]
@@ -238,6 +244,7 @@ class DataBaseSamplerV2:
             return ret, np.ones((len(ret),), dtype=np.int64)
 
     def sample_v1(self, name, num):
+        raise NotImplementedError
         if isinstance(name, (list, tuple)):
             group_name = ", ".join(name)
             ret = self._sampler_dict[group_name].sample(num)
@@ -296,6 +303,7 @@ class DataBaseSamplerV2:
         return valid_samples
 
     def sample_group(self, name, num, gt_boxes, gt_group_ids):
+        raise NotImplementedError
         sampled, group_num = self.sample(name, num)
         sampled = copy.deepcopy(sampled)
         # rewrite sampled group id to avoid duplicated with gt group ids

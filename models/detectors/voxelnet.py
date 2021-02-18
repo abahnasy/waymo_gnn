@@ -20,13 +20,12 @@ class VoxelNet(SingleStageDetector):
         )
         
     def extract_feat(self, data):
-        input_features = self.reader(data["features"], data["num_voxels"])
+        input_features = self.reader(data["features"], data["num_voxels"]) #[num_voxels, num_features]
         x, voxel_feature = self.backbone(
             input_features, data["coors"], data["batch_size"], data["input_shape"]
         )
-        if self.with_neck:
+        if self.with_neck:            
             x = self.neck(x)
-
         return x, voxel_feature
 
     def forward(self, example, return_loss=True, **kwargs):
@@ -45,9 +44,8 @@ class VoxelNet(SingleStageDetector):
             input_shape=example["shape"][0],
         )
 
-        x, _ = self.extract_feat(data)
+        x, _ = self.extract_feat(data) # TODO: remove voxel features to save space in the gpu memory
         preds = self.bbox_head(x)
-
         if return_loss:
             return self.bbox_head.loss(example, preds)
         else:

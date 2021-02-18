@@ -344,6 +344,8 @@ def parse_args():
 
 
 def reorganize_info(infos):
+    ''' change infos dict keys from local indices to tokens defined by waymo dataset
+    '''
     new_info = {}
 
     for info in infos:

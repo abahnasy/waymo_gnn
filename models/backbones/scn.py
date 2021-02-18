@@ -146,8 +146,17 @@ class SpMiddleResNetFHD(nn.Module):
         )
 
     def forward(self, voxel_features, coors, batch_size, input_shape):
+        """
+        Args:
+            voxel_features: [num_voxels, 5] from voxel encoder !
+            coors: coordinates of the used voxels
+            batch_size:
+            input_shape: shape of the voxel grid
+        Returns:
+        """
 
         # input: # [41, 1600, 1408]
+        # Waymo input grid [1504, 1504, 40]
         sparse_shape = np.array(input_shape[::-1]) + [1, 0, 0]
 
         coors = coors.int()
@@ -173,5 +182,5 @@ class SpMiddleResNetFHD(nn.Module):
             'conv3': x_conv3,
             'conv4': x_conv4,
         }
-
+        # print("final shape from sparse conv is ", ret.shape)
         return ret, multi_scale_voxel_features

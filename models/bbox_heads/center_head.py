@@ -163,7 +163,7 @@ class CenterHead(nn.Module):
         self,
         in_channels=[128,],
         tasks=[],
-        dataset='nuscenes',
+        dataset='waymo',
         weight=0.25,
         code_weights=[],
         common_heads=dict(),
@@ -234,6 +234,8 @@ class CenterHead(nn.Module):
 
         for task in self.tasks:
             ret_dicts.append(task(x))
+            
+            
 
         return ret_dicts
 

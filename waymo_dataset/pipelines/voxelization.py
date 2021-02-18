@@ -18,7 +18,7 @@ class Voxelization(object):
         self.max_points_in_voxel = cfg.max_points_in_voxel
         self.max_voxel_num = [cfg.max_voxel_num, cfg.max_voxel_num] if isinstance(cfg.max_voxel_num, int) else cfg.max_voxel_num
 
-        self.double_flip = cfg.get('double_flip', False)
+        # self.double_flip = cfg.get('double_flip', False)
 
         self.voxel_generator = VoxelGenerator(
             voxel_size=self.voxel_size,
@@ -58,52 +58,52 @@ class Voxelization(object):
             size=voxel_size
         )
 
-        double_flip = self.double_flip and (res["mode"] != 'train')
+        # double_flip = self.double_flip and (res["mode"] != 'train')
 
-        if double_flip:
-            flip_voxels, flip_coordinates, flip_num_points = self.voxel_generator.generate(
-                res["lidar"]["yflip_points"]
-            )
-            flip_num_voxels = np.array([flip_voxels.shape[0]], dtype=np.int64)
+        # if double_flip:
+        #     flip_voxels, flip_coordinates, flip_num_points = self.voxel_generator.generate(
+        #         res["lidar"]["yflip_points"]
+        #     )
+        #     flip_num_voxels = np.array([flip_voxels.shape[0]], dtype=np.int64)
 
-            res["lidar"]["yflip_voxels"] = dict(
-                voxels=flip_voxels,
-                coordinates=flip_coordinates,
-                num_points=flip_num_points,
-                num_voxels=flip_num_voxels,
-                shape=grid_size,
-                range=pc_range,
-                size=voxel_size
-            )
+        #     res["lidar"]["yflip_voxels"] = dict(
+        #         voxels=flip_voxels,
+        #         coordinates=flip_coordinates,
+        #         num_points=flip_num_points,
+        #         num_voxels=flip_num_voxels,
+        #         shape=grid_size,
+        #         range=pc_range,
+        #         size=voxel_size
+        #     )
 
-            flip_voxels, flip_coordinates, flip_num_points = self.voxel_generator.generate(
-                res["lidar"]["xflip_points"]
-            )
-            flip_num_voxels = np.array([flip_voxels.shape[0]], dtype=np.int64)
+        #     flip_voxels, flip_coordinates, flip_num_points = self.voxel_generator.generate(
+        #         res["lidar"]["xflip_points"]
+        #     )
+        #     flip_num_voxels = np.array([flip_voxels.shape[0]], dtype=np.int64)
 
-            res["lidar"]["xflip_voxels"] = dict(
-                voxels=flip_voxels,
-                coordinates=flip_coordinates,
-                num_points=flip_num_points,
-                num_voxels=flip_num_voxels,
-                shape=grid_size,
-                range=pc_range,
-                size=voxel_size
-            )
+        #     res["lidar"]["xflip_voxels"] = dict(
+        #         voxels=flip_voxels,
+        #         coordinates=flip_coordinates,
+        #         num_points=flip_num_points,
+        #         num_voxels=flip_num_voxels,
+        #         shape=grid_size,
+        #         range=pc_range,
+        #         size=voxel_size
+        #     )
 
-            flip_voxels, flip_coordinates, flip_num_points = self.voxel_generator.generate(
-                res["lidar"]["double_flip_points"]
-            )
-            flip_num_voxels = np.array([flip_voxels.shape[0]], dtype=np.int64)
+        #     flip_voxels, flip_coordinates, flip_num_points = self.voxel_generator.generate(
+        #         res["lidar"]["double_flip_points"]
+        #     )
+        #     flip_num_voxels = np.array([flip_voxels.shape[0]], dtype=np.int64)
 
-            res["lidar"]["double_flip_voxels"] = dict(
-                voxels=flip_voxels,
-                coordinates=flip_coordinates,
-                num_points=flip_num_points,
-                num_voxels=flip_num_voxels,
-                shape=grid_size,
-                range=pc_range,
-                size=voxel_size
-            )            
+        #     res["lidar"]["double_flip_voxels"] = dict(
+        #         voxels=flip_voxels,
+        #         coordinates=flip_coordinates,
+        #         num_points=flip_num_points,
+        #         num_voxels=flip_num_voxels,
+        #         shape=grid_size,
+        #         range=pc_range,
+        #         size=voxel_size
+        #     )            
 
         return res, info

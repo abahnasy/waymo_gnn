@@ -53,9 +53,9 @@ def create_groundtruth_database(
     else:
         raise NotImplementedError()
 
-    if dataset_class_name == "NUSC":
-        point_features = 5
-    elif dataset_class_name == "WAYMO":
+    # if dataset_class_name == "NUSC":
+        # point_features = 5
+    if dataset_class_name == "WAYMO":
         point_features = 5 if nsweeps == 1 else 6 
     else:
         raise NotImplementedError()

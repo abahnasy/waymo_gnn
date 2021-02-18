@@ -1,13 +1,13 @@
-import time
+# import time
 import numpy as np
-import math
+# import math
 
 import torch
 
 from torch import nn
-from torch.nn import functional as F
-from torchvision.models import resnet
-from torch.nn.modules.batchnorm import _BatchNorm
+# from torch.nn import functional as F
+# from torchvision.models import resnet
+# from torch.nn.modules.batchnorm import _BatchNorm
 
 # from det3d.torchie.cnn import constant_init, kaiming_init, xavier_init
 # from det3d.torchie.trainer import load_checkpoint
@@ -127,8 +127,8 @@ class RPN(nn.Module):
         block = Sequential(
             nn.ZeroPad2d(1),
             nn.Conv2d(inplanes, planes, 3, stride=stride, bias=False),
-            build_norm_layer(self._norm_cfg, planes)[1],
-            # nn.BatchNorm2d(planes, eps=1e-3, momentum=0.01),
+            # build_norm_layer(self._norm_cfg, planes)[1], TODO: check the impact of using nn.BatchNorm instead of the wrapper function !
+            nn.BatchNorm2d(planes, eps=1e-3, momentum=0.01),
             nn.ReLU(),
         )
 

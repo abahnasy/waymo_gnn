@@ -24,9 +24,9 @@ class AssignLabel(object):
         assigner_cfg = kwargs["cfg"]
         self.out_size_factor = assigner_cfg.out_size_factor
         self.tasks = assigner_cfg.target_assigner.tasks
-        self.gaussian_overlap = assigner_cfg.gaussian_overlap
-        self._max_objs = assigner_cfg.max_objs
-        self._min_radius = assigner_cfg.min_radius
+        self.gaussian_overlap = assigner_cfg.gaussian_overlap # ex. = 0.1
+        self._max_objs = assigner_cfg.max_objs # ex. = 500
+        self._min_radius = assigner_cfg.min_radius # ex. = 2
 
     def __call__(self, res, info):
         max_objs = self._max_objs
@@ -94,15 +94,15 @@ class AssignLabel(object):
 
             for idx, task in enumerate(self.tasks):
                 hm = np.zeros((len(class_names_by_task[idx]), feature_map_size[1], feature_map_size[0]),
-                              dtype=np.float32)
+                              dtype=np.float32) # heatmap [num_classes, x,y]
 
-                if res['type'] == 'NuScenesDataset':
-                    # [reg, hei, dim, vx, vy, rots, rotc]
-                    anno_box = np.zeros((max_objs, 10), dtype=np.float32)
-                elif res['type'] == 'WaymoDataset':
+                # if res['type'] == 'NuScenesDataset':
+                #     # [reg, hei, dim, vx, vy, rots, rotc]
+                #     anno_box = np.zeros((max_objs, 10), dtype=np.float32)
+                if res['type'] == 'WaymoDataset':
                     anno_box = np.zeros((max_objs, 10), dtype=np.float32) 
                 else:
-                    raise NotImplementedError("Only Support nuScene for Now!")
+                    raise NotImplementedError("Now Waymo !")
 
                 ind = np.zeros((max_objs), dtype=np.int64)
                 mask = np.zeros((max_objs), dtype=np.uint8)
@@ -144,20 +144,20 @@ class AssignLabel(object):
                         ind[new_idx] = y * feature_map_size[0] + x
                         mask[new_idx] = 1
 
-                        if res['type'] == 'NuScenesDataset': 
-                            vx, vy = gt_dict['gt_boxes'][idx][k][6:8]
-                            rot = gt_dict['gt_boxes'][idx][k][8]
-                            anno_box[new_idx] = np.concatenate(
-                                (ct - (x, y), z, np.log(gt_dict['gt_boxes'][idx][k][3:6]),
-                                np.array(vx), np.array(vy), np.sin(rot), np.cos(rot)), axis=None)
-                        elif res['type'] == 'WaymoDataset':
+                        # if res['type'] == 'NuScenesDataset': 
+                        #     vx, vy = gt_dict['gt_boxes'][idx][k][6:8]
+                        #     rot = gt_dict['gt_boxes'][idx][k][8]
+                        #     anno_box[new_idx] = np.concatenate(
+                        #         (ct - (x, y), z, np.log(gt_dict['gt_boxes'][idx][k][3:6]),
+                        #         np.array(vx), np.array(vy), np.sin(rot), np.cos(rot)), axis=None)
+                        if res['type'] == 'WaymoDataset':
                             vx, vy = gt_dict['gt_boxes'][idx][k][6:8]
                             rot = gt_dict['gt_boxes'][idx][k][-1]
                             anno_box[new_idx] = np.concatenate(
                             (ct - (x, y), z, np.log(gt_dict['gt_boxes'][idx][k][3:6]),
                             np.array(vx), np.array(vy), np.sin(rot), np.cos(rot)), axis=None)
                         else:
-                            raise NotImplementedError("Only Support Waymo and nuScene for Now")
+                            raise NotImplementedError("Not Waymo !")
 
                 hms.append(hm)
                 anno_boxs.append(anno_box)
@@ -169,9 +169,9 @@ class AssignLabel(object):
             boxes = flatten(gt_dict['gt_boxes'])
             classes = merge_multi_group_label(gt_dict['gt_classes'], num_classes_by_task)
 
-            if res["type"] == "NuScenesDataset":
-                gt_boxes_and_cls = np.zeros((max_objs, 10), dtype=np.float32)
-            elif res['type'] == "WaymoDataset":
+            # if res["type"] == "NuScenesDataset":
+            #     gt_boxes_and_cls = np.zeros((max_objs, 10), dtype=np.float32)
+            if res['type'] == "WaymoDataset":
                 gt_boxes_and_cls = np.zeros((max_objs, 10), dtype=np.float32)
             else:
                 raise NotImplementedError()

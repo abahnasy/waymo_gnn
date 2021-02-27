@@ -1,6 +1,6 @@
 ''' REF: https://github.com/tianweiy/CenterPoint
 '''
-
+from utils.profiler import timeit
 import logging
 from collections import defaultdict
 from utils.bbox import box_torch_ops
@@ -216,7 +216,7 @@ class CenterHead(nn.Module):
         for num_cls in num_classes:
             heads = copy.deepcopy(common_heads)
             if not dcn_head:
-                heads.update(dict(hm=(num_cls, num_hm_conv)))
+                heads.update(dict(hm=[num_cls, num_hm_conv]))
                 self.tasks.append(
                     SepHead(share_conv_channel, heads, bn=True, init_bias=init_bias, final_kernel=3)
                 )
@@ -242,7 +242,8 @@ class CenterHead(nn.Module):
     def _sigmoid(self, x):
         y = torch.clamp(x.sigmoid_(), min=1e-4, max=1-1e-4)
         return y
-
+    
+    
     def loss(self, example, preds_dicts, **kwargs):
         rets = []
         for task_id, preds_dict in enumerate(preds_dicts):

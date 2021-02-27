@@ -1,8 +1,13 @@
 from pathlib import Path
 import os, pickle
 import numpy as np
+from omegaconf import DictConfig
+import hydra
+
+from waymo_dataset.registry import PIPELINES
 
 def get_obj(path):
+    path = hydra.utils.to_absolute_path(path)
     with open(path, 'rb') as f:
             obj = pickle.load(f)
     return obj 
@@ -40,7 +45,7 @@ def read_single_waymo_sweep(sweep):
     
     return points_sweep.T, curr_times.T
 
-
+@PIPELINES.register_module
 class LoadPointCloudFromFile(object):
     def __init__(self, dataset="WaymoDataset", **kwargs):
         self.type = dataset
@@ -85,6 +90,8 @@ class LoadPointCloudFromFile(object):
 
         return res, info
 
+
+@PIPELINES.register_module
 class LoadPointCloudAnnotations(object):
     def __init__(self, with_bbox=True, **kwargs):
         pass

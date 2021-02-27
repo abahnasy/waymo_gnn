@@ -1,4 +1,4 @@
-# from ..registry import DETECTORS
+import time
 from .single_stage import SingleStageDetector
 import torch
 from copy import deepcopy 
@@ -18,14 +18,21 @@ class VoxelNet(SingleStageDetector):
         super(VoxelNet, self).__init__(
             reader, backbone, neck, bbox_head, train_cfg, test_cfg, pretrained
         )
-        
     def extract_feat(self, data):
+        tick = time.time()
         input_features = self.reader(data["features"], data["num_voxels"]) #[num_voxels, num_features]
+        print("\telapsed reader time ", time.time() - tick)
+        tick = time.time()
+
         x, voxel_feature = self.backbone(
             input_features, data["coors"], data["batch_size"], data["input_shape"]
         )
+        print("\telapsed backbone time ", time.time() - tick)
+        
+        tick = time.time()
         if self.with_neck:            
             x = self.neck(x)
+        print("\telapsed neck time ", time.time() - tick)
         return x, voxel_feature
 
     def forward(self, example, return_loss=True, **kwargs):
@@ -44,7 +51,7 @@ class VoxelNet(SingleStageDetector):
             input_shape=example["shape"][0],
         )
 
-        x, _ = self.extract_feat(data) # TODO: remove voxel features to save space in the gpu memory
+        x, _ = self.extract_feat(data)
         preds = self.bbox_head(x)
         if return_loss:
             return self.bbox_head.loss(example, preds)

@@ -61,7 +61,7 @@
 
 
 # Launch Tensorboard
-```python3 -m tensorboard.main --logdir work_dirs/tf_logs --port=6006```
+```python3 -m tensorboard.main --logdir work_dirs/ --port=6006```
 
 
 # Tasks
@@ -91,6 +91,7 @@
 - [ ] remove multi task implememntation
 - [ ] ~~change viz to mayavi `REF: https://github.com/DapengFeng/waymo-toolkit`~~
 - [ ] in depth documentation `REF: https://github.com/Jossome/Waymo-open-dataset-document`
+- [ ] open3d viz `https://github.com/caizhongang/waymo_kitti_converter/blob/master/tools/dataloader_visualizer.py`
 
 # Acknowledgment
 * `https://github.com/poodarchu/Det3D`

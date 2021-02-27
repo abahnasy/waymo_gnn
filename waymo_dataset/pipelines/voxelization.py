@@ -1,5 +1,6 @@
 import numpy as np
 
+from waymo_dataset.registry import PIPELINES
 from utils.voxel_generator import VoxelGenerator
 from utils.sampler import preprocess as prep
 
@@ -10,13 +11,13 @@ def _dict_select(dict_, inds):
         else:
             dict_[k] = v[inds]
 
+@PIPELINES.register_module
 class Voxelization(object):
     def __init__(self, **kwargs):
-        cfg = kwargs.get("cfg", None)
-        self.range = cfg.range
-        self.voxel_size = cfg.voxel_size
-        self.max_points_in_voxel = cfg.max_points_in_voxel
-        self.max_voxel_num = [cfg.max_voxel_num, cfg.max_voxel_num] if isinstance(cfg.max_voxel_num, int) else cfg.max_voxel_num
+        self.range = kwargs.get("range")
+        self.voxel_size = kwargs.get("voxel_size")
+        self.max_points_in_voxel = kwargs.get("max_points_in_voxel")
+        self.max_voxel_num = [kwargs.get("max_voxel_num"), kwargs.get("max_voxel_num")] if isinstance(kwargs.get("max_voxel_num"), int) else kwargs.get("max_voxel_num")
 
         # self.double_flip = cfg.get('double_flip', False)
 

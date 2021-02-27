@@ -2,9 +2,13 @@
 """
 from pathlib import Path
 import pickle
+
+import hydra
 from torch.utils.data import Dataset
 from waymo_dataset.pipelines.compose import Compose
+from waymo_dataset.registry import DATASETS
 
+@DATASETS.register_module
 class WaymoDataset(Dataset):
     
     CLASSES = None
@@ -27,8 +31,8 @@ class WaymoDataset(Dataset):
         super(WaymoDataset, self).__init__(
             
         )
-        self._info_path = info_path
-        self._root_path = Path(root_path)
+        # self._info_path = hydra.utils.to_absolute_path(info_path)
+        self._root_path = Path(hydra.utils.to_absolute_path(root_path))
         self._class_names = class_names
         self.test_mode = test_mode
 
@@ -42,7 +46,7 @@ class WaymoDataset(Dataset):
         self.nsweeps = nsweeps
         print("Using {} sweeps".format(nsweeps))
 
-        self._info_path = info_path
+        self._info_path = hydra.utils.to_absolute_path(info_path)
         self._class_names = class_names
         self._num_point_features = WaymoDataset.NumPointFeatures if nsweeps == 1 else WaymoDataset.NumPointFeatures+1
 

@@ -1,5 +1,7 @@
 
 import numpy as np
+
+from waymo_dataset.registry import PIPELINES
 from utils.bbox import box_np_ops
 from utils.center_utils import (
     draw_umich_gaussian, gaussian_radius
@@ -18,15 +20,16 @@ def merge_multi_group_label(gt_classes, num_classes_by_task):
 
     return flatten(gt_classes)
 
+@PIPELINES.register_module
 class AssignLabel(object):
     def __init__(self, **kwargs):
         """Return CenterNet training labels like heatmap, height, offset"""
-        assigner_cfg = kwargs["cfg"]
-        self.out_size_factor = assigner_cfg.out_size_factor
-        self.tasks = assigner_cfg.target_assigner.tasks
-        self.gaussian_overlap = assigner_cfg.gaussian_overlap # ex. = 0.1
-        self._max_objs = assigner_cfg.max_objs # ex. = 500
-        self._min_radius = assigner_cfg.min_radius # ex. = 2
+        # assigner_cfg = kwargs["cfg"]
+        self.out_size_factor = kwargs.get("out_size_factor")
+        self.tasks = kwargs.get("tasks")
+        self.gaussian_overlap = kwargs.get("gaussian_overlap") # ex. = 0.1
+        self._max_objs = kwargs.get("max_objs") # ex. = 500
+        self._min_radius = kwargs.get("min_radius") # ex. = 2
 
     def __call__(self, res, info):
         max_objs = self._max_objs

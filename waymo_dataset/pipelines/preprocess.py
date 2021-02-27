@@ -1,5 +1,7 @@
 import numpy as np
+import hydra
 
+from waymo_dataset.registry import PIPELINES
 from utils.sampler import preprocess as prep
 from utils.bbox import box_np_ops
 
@@ -16,50 +18,53 @@ def drop_arrays_by_name(gt_names, used_classes):
     inds = np.array(inds, dtype=np.int64)
     return inds
 
+@PIPELINES.register_module
 class Preprocess(object):
-    def __init__(self, cfg=None, **kwargs):
-        self.shuffle_points = cfg.shuffle_points
-        self.min_points_in_gt = cfg.get("min_points_in_gt", -1)
+    def __init__(self, **kwargs):
+        self.shuffle_points = kwargs.get("shuffle_points", False) # cfg.shuffle_points
+        self.min_points_in_gt = kwargs.get("min_points_in_gt", -1)
         
-        self.mode = cfg.mode
+        self.mode = kwargs.get('mode')
         if self.mode == "train":
-            self.global_rotation_noise = cfg.global_rot_noise
-            self.global_scaling_noise = cfg.global_scale_noise
-            self.class_names = cfg.class_names
-            if cfg.db_sampler != None:
+            self.global_rotation_noise = kwargs.get("global_rot_noise", None)
+            self.global_scaling_noise = kwargs.get("global_scale_noise", None)
+            self.class_names = kwargs.get("class_names")
+            assert len(self.class_names) != 0
+            self.db_sampler = kwargs.get('db_sampler', None)
+            if self.db_sampler != None:
                 # print(cfg.db_sampler)
                 # raise NotImplementedError # TODO: implement the builder !
                 # self.db_sampler = build_dbsampler(cfg.db_sampler)
                 from utils.sampler.sample_ops import DataBaseSamplerV2
                 import pickle, logging
                 logger = logging.getLogger("build_dbsampler")
-                info_path = cfg.db_sampler.db_info_path
+                info_path = hydra.utils.to_absolute_path(self.db_sampler['db_info_path']) # skip hydra current output folder
                 with open(info_path, "rb") as f:
                     db_infos = pickle.load(f)
                 # build preprocessors
                 from utils.sampler.preprocess import DBFilterByDifficulty, DBFilterByMinNumPoint, DataBasePreprocessor
                 preprocessors = []    
-                if "filter_by_difficulty" in cfg.db_sampler.db_prep_steps:
-                    v = cfg.db_sampler.db_prep_steps["filter_by_difficulty"]
+                if "filter_by_difficulty" in self.db_sampler['db_prep_steps']:
+                    v = self.db_sampler['db_prep_steps']["filter_by_difficulty"]
                     preprocessors.append(DBFilterByDifficulty(v, logger=logger))
-                elif "filter_by_min_num_points" in cfg.db_sampler.db_prep_steps:
-                    v = cfg.db_sampler.db_prep_steps["filter_by_min_num_points"]
+                elif "filter_by_min_num_points" in self.db_sampler['db_prep_steps']:
+                    v = self.db_sampler['db_prep_steps']["filter_by_min_num_points"]
                     preprocessors.append(DBFilterByMinNumPoint(v, logger=logger))
                 db_prepor = DataBasePreprocessor(preprocessors)
                 self.db_sampler = DataBaseSamplerV2(
                     db_infos, 
-                    groups = cfg.db_sampler.sample_groups, 
+                    groups = self.db_sampler['sample_groups'],
                     db_prepor = db_prepor, 
-                    rate = cfg.db_sampler.rate, 
-                    global_rot_range = cfg.db_sampler.global_random_rotation_range_per_object, 
+                    rate = self.db_sampler['rate'], 
+                    global_rot_range = self.db_sampler['global_random_rotation_range_per_object'], 
                     logger=logger
                 )
             else:
                 self.db_sampler = None 
                 
-            self.npoints = cfg.get("npoints", -1)
+            self.npoints = kwargs.get("npoints", -1)
 
-        self.no_augmentation = cfg.get('no_augmentation', False)
+        self.no_augmentation = kwargs.get('no_augmentation', False)
 
     def __call__(self, res, info):
 

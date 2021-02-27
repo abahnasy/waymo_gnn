@@ -2,7 +2,9 @@
 #     def __init__(self, data):
 #         self.data = data
 
+from waymo_dataset.registry import PIPELINES
 
+@PIPELINES.register_module
 class Reformat(object):
     def __init__(self, **kwargs):
         # double_flip = kwargs.get('double_flip', False)

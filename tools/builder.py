@@ -60,7 +60,7 @@ def build_dataset(cfg, type='train', logger=None):
             info_path=cfg.val_anno,
             root_path=cfg.data_root,
             pipeline=train_pipeline, #TODO: fix this later, temp use of train pipeline !
-            ann_file = cfg.val_anno,
+            # ann_file = cfg.val_anno,
             test_mode=True,
             nsweeps= cfg.nsweeps,
             class_names=cfg.class_names,
@@ -72,17 +72,6 @@ def build_dataset(cfg, type='train', logger=None):
 
     return dataset
 
-    # ds = WaymoDataset(
-    #     info_path = train_anno,
-    #     root_path = data_root,
-    #     cfg=None,
-    #     pipeline=train_pipeline,
-    #     class_names=class_names,
-    #     test_mode=False,
-    #     sample=False,
-    #     nsweeps=nsweeps,
-    #     load_interval=1,
-    # )
 
 def build_dataloader(dataset, type, cfg, logger=None):
     sampler = None # TODO: check Group Sampler
@@ -122,7 +111,7 @@ def build_model(cfg, logger=None):
         bbox_head = CenterHead(**bbox_head),
         train_cfg= None, # cfg.train_cfg,
         test_cfg=cfg.model.test_cfg,
-        pretrained=OmegaConf.is_none(cfg.model, "pretrained")
+        pretrained= cfg.model
     )
     # model.CLASSES = ds.CLASSES
     return model

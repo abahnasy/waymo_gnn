@@ -9,7 +9,9 @@ test_anno: None
 total_epochs: 36
 batch_size: 2
 num_workers: 8
-resume_from: 
+resume_from: # used for training, override suing cmd
+checkpoint:  # used for testing, override using cmd
+output_dir: ckpts_results
 seed: 
 nsweeps: 1
 class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
@@ -120,10 +122,10 @@ model:
       nms_pre_max_size: 4096
       nms_post_max_size: 500
       nms_iou_threshold: 0.7
-      score_threshold: 0.1
-      pc_range: [-75.2, -75.2]
-      out_size_factor: 8
-      voxel_size: [0.1, 0.1]
+    score_threshold: 0.1
+    pc_range: [-75.2, -75.2]
+    out_size_factor: 8
+    voxel_size: [0.1, 0.1]
 # Optimizer Configurations
 optimizer:
   type: adam

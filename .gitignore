@@ -132,3 +132,4 @@ dmypy.json
 /outputs/
 /work_dirs/
 side_experiments
+ckpts_results

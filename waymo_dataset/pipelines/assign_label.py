@@ -1,6 +1,7 @@
 
 import numpy as np
 
+from tools.profiler import timeit
 from waymo_dataset.registry import PIPELINES
 from utils.bbox import box_np_ops
 from utils.center_utils import (
@@ -30,7 +31,8 @@ class AssignLabel(object):
         self.gaussian_overlap = kwargs.get("gaussian_overlap") # ex. = 0.1
         self._max_objs = kwargs.get("max_objs") # ex. = 500
         self._min_radius = kwargs.get("min_radius") # ex. = 2
-
+    
+    # @timeit
     def __call__(self, res, info):
         max_objs = self._max_objs
         class_names_by_task = [t.class_names for t in self.tasks]

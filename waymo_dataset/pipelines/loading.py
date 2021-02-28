@@ -1,10 +1,12 @@
 from pathlib import Path
 import os, pickle
+from time import time
 import numpy as np
 from omegaconf import DictConfig
 import hydra
 
 from waymo_dataset.registry import PIPELINES
+from tools.profiler import timeit
 
 def get_obj(path):
     path = hydra.utils.to_absolute_path(path)
@@ -51,7 +53,8 @@ class LoadPointCloudFromFile(object):
         self.type = dataset
         self.random_select = kwargs.get("random_select", False)
         self.npoints = kwargs.get("npoints", 16834)
-
+    
+    # @timeit
     def __call__(self, res, info):
 
         res["type"] = self.type
@@ -96,6 +99,7 @@ class LoadPointCloudAnnotations(object):
     def __init__(self, with_bbox=True, **kwargs):
         pass
 
+    # @timeit
     def __call__(self, res, info):
 
         # if res["type"] in ["NuScenesDataset"] and "gt_boxes" in info:

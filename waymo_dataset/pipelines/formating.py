@@ -3,6 +3,7 @@
 #         self.data = data
 
 from waymo_dataset.registry import PIPELINES
+from tools.profiler import timeit
 
 @PIPELINES.register_module
 class Reformat(object):
@@ -10,7 +11,8 @@ class Reformat(object):
         # double_flip = kwargs.get('double_flip', False)
         # self.double_flip = double_flip 
         pass 
-
+    
+    # @timeit
     def __call__(self, res, info):
         meta = res["metadata"]
         points = res["lidar"]["points"]

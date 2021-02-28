@@ -1,5 +1,6 @@
 import numpy as np
 
+from tools.profiler import timeit
 from waymo_dataset.registry import PIPELINES
 from utils.voxel_generator import VoxelGenerator
 from utils.sampler import preprocess as prep
@@ -28,6 +29,7 @@ class Voxelization(object):
             max_voxels=self.max_voxel_num[0],
         )
 
+    # @timeit
     def __call__(self, res, info):
         voxel_size = self.voxel_generator.voxel_size
         pc_range = self.voxel_generator.point_cloud_range

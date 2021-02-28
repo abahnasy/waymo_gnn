@@ -1,6 +1,7 @@
 import numpy as np
 import hydra
 
+from tools.profiler import timeit
 from waymo_dataset.registry import PIPELINES
 from utils.sampler import preprocess as prep
 from utils.bbox import box_np_ops
@@ -66,6 +67,7 @@ class Preprocess(object):
 
         self.no_augmentation = kwargs.get('no_augmentation', False)
 
+    # @timeit
     def __call__(self, res, info):
 
         res["mode"] = self.mode

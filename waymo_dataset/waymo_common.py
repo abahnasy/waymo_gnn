@@ -12,6 +12,7 @@ from functools import reduce
 from typing import Tuple, List
 import os 
 
+import hydra
 from tqdm import tqdm
 import argparse
 
@@ -36,6 +37,7 @@ CAT_NAME_TO_ID = {
 TYPE_LIST = ['UNKNOWN', 'VEHICLE', 'PEDESTRIAN', 'SIGN', 'CYCLIST']
 
 def get_obj(path):
+    path = hydra.utils.to_absolute_path(path)
     with open(path, 'rb') as f:
             obj = pickle.load(f)
     return obj 

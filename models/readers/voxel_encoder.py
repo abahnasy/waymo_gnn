@@ -1,3 +1,5 @@
+'''REF: https://github.com/slam-research-group-kr/SECOND-ROS/blob/150cae25dc706cded203bb462a0ac6325dab4b78/second/pytorch/models/voxel_encoder.py
+'''
 from torch import nn
 from torch.nn import functional as F
 

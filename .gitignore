@@ -133,3 +133,4 @@ dmypy.json
 /work_dirs/
 side_experiments
 ckpts_results
+wandb

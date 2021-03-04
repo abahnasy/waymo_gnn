@@ -1,13 +1,15 @@
 import torch.nn as nn
 import logging
-
+from models.registry import DETECTORS
 # from .. import builder
 
 from ..frozen_batch_norm import FrozenBatchNorm2d
 from utils.checkpoint import load_checkpoint
 
+from models.model_builder import build_backbone, build_bbox_head,build_reader, build_neck
 
-# @DETECTORS.register_module
+
+@DETECTORS.register_module
 class SingleStageDetector(nn.Module):
     def __init__(
         self,
@@ -20,11 +22,12 @@ class SingleStageDetector(nn.Module):
         pretrained=None,
     ):
         super(SingleStageDetector, self).__init__()
-        self.reader = reader
-        self.backbone = backbone
+        print(reader)
+        self.reader = build_reader(reader)
+        self.backbone = build_backbone(backbone)
         if neck is not None:
-            self.neck = neck
-        self.bbox_head = bbox_head
+            self.neck = build_neck(neck)
+        self.bbox_head = build_bbox_head(bbox_head)
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
 

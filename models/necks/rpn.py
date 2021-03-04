@@ -4,6 +4,8 @@ import numpy as np
 
 import torch
 
+from models.registry import NECKS
+
 from torch import nn
 # from torch.nn import functional as F
 # from torchvision.models import resnet
@@ -18,9 +20,10 @@ from ..misc import Sequential, xavier_init
 # from .. import builder
 # from ..registry import NECKS
 from ..build_norm_layer import build_norm_layer
+import logging
+logger = logging.getLogger(__name__)
 
-
-# @NECKS.register_module
+@NECKS.register_module
 class RPN(nn.Module):
     def __init__(
         self,
@@ -32,7 +35,7 @@ class RPN(nn.Module):
         num_input_features,
         norm_cfg=None,
         name="rpn",
-        logger=None,
+        # logger=None,
         **kwargs
     ):
         super(RPN, self).__init__()

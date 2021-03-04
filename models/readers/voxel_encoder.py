@@ -3,11 +3,13 @@
 from torch import nn
 from torch.nn import functional as F
 
+from models.registry import READERS
 
 
 
 
 
+@READERS.register_module
 class VoxelFeatureExtractorV3(nn.Module):
     def __init__(
         self, num_input_features=4, norm_cfg=None, name="VoxelFeatureExtractorV3", **kwargs

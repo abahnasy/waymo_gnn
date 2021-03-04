@@ -1,11 +1,62 @@
+import time
 import numpy as np
 import spconv
 from spconv import SparseConv3d, SubMConv3d
 from torch import nn
 from torch.nn import functional as F
 
-# from ..registry import BACKBONES
-from ..build_norm_layer import build_norm_layer
+from models.registry import BACKBONES
+
+# from ..build_norm_layer import build_norm_layer
+
+norm_cfg = {
+    # format: layer_type: (abbreviation, module)
+    "BN": ("bn", nn.BatchNorm2d),
+    "BN1d": ("bn1d", nn.BatchNorm1d),
+    "GN": ("gn", nn.GroupNorm),
+}
+def build_norm_layer(cfg, num_features, postfix=""):
+    """ Build normalization layer
+    Args:
+        cfg (dict): cfg should contain:
+            type (str): identify norm layer type.
+            layer args: args needed to instantiate a norm layer.
+            requires_grad (bool): [optional] whether stop gradient updates
+        num_features (int): number of channels from input.
+        postfix (int, str): appended into norm abbreviation to
+            create named layer.
+    Returns:
+        name (str): abbreviation + postfix
+        layer (nn.Module): created norm layer
+    """
+    assert isinstance(cfg, dict) and "type" in cfg
+    cfg_ = cfg.copy()
+
+    layer_type = cfg_.pop("type")
+    if layer_type not in norm_cfg:
+        raise KeyError("Unrecognized norm type {}".format(layer_type))
+    else:
+        abbr, norm_layer = norm_cfg[layer_type]
+        if norm_layer is None:
+            raise NotImplementedError
+
+    assert isinstance(postfix, (int, str))
+    name = abbr + str(postfix)
+
+    requires_grad = cfg_.pop("requires_grad", True)
+    cfg_.setdefault("eps", 1e-5)
+    if layer_type != "GN":
+        layer = norm_layer(num_features, **cfg_)
+        # if layer_type == 'SyncBN':
+        #     layer._specify_ddp_gpu_num(1)
+    else:
+        assert "num_groups" in cfg_
+        layer = norm_layer(num_channels=num_features, **cfg_)
+
+    for param in layer.parameters():
+        param.requires_grad = requires_grad
+
+    return name, layer
 
 
 def conv3x3(in_planes, out_planes, stride=1, indice_key=None, bias=True):
@@ -33,7 +84,7 @@ def conv1x1(in_planes, out_planes, stride=1, indice_key=None, bias=True):
         indice_key=indice_key,
     )
 
-
+# REF: https://github.com/traveller59/spconv/issues/30
 class SparseBasicBlock(spconv.SparseModule):
     expansion = 1
 
@@ -80,7 +131,7 @@ class SparseBasicBlock(spconv.SparseModule):
         return out
 
 
-# @BACKBONES.register_module
+@BACKBONES.register_module
 class SpMiddleResNetFHD(nn.Module):
     def __init__(
         self, num_input_features=128, norm_cfg=None, name="SpMiddleResNetFHD", **kwargs
@@ -160,27 +211,66 @@ class SpMiddleResNetFHD(nn.Module):
         sparse_shape = np.array(input_shape[::-1]) + [1, 0, 0]
 
         coors = coors.int()
+        # t = time.time()
         ret = spconv.SparseConvTensor(voxel_features, coors, sparse_shape, batch_size)
+        # print("\t\t spconv: creating the sparse vector", time.time() - t); t = time.time()
 
         x = self.conv_input(ret)
+        # print("\t\t spconv: input conv", time.time() - t); t = time.time()
 
-        x_conv1 = self.conv1(x)
-        x_conv2 = self.conv2(x_conv1)
-        x_conv3 = self.conv3(x_conv2)
-        x_conv4 = self.conv4(x_conv3)
+        # x_conv1 = self.conv1(x)
+        # x_conv2 = self.conv2(x_conv1)
+        # x_conv3 = self.conv3(x_conv2)
+        # x_conv4 = self.conv4(x_conv3)
+        x = self.conv1(x)
+        # print("\t\t spconv: conv 1", time.time() - t); t = time.time()
+        x = self.conv2(x)
+        # print("\t\t spconv: conv 2", time.time() - t); t = time.time()
+        x = self.conv3(x)
+        # print("\t\t spconv: conv 3", time.time() - t); t = time.time()
+        x = self.conv4(x)
+        # print("\t\t spconv: conv 4", time.time() - t); t = time.time()
+        
 
-        ret = self.extra_conv(x_conv4)
+        ret = self.extra_conv(x)
+        # print("\t\t spconv: conv extra", time.time() - t); t = time.time()
 
         ret = ret.dense()
+        # print("\t\t spconv: dense output", time.time() - t); t = time.time()
 
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
 
         multi_scale_voxel_features = {
-            'conv1': x_conv1,
-            'conv2': x_conv2,
-            'conv3': x_conv3,
-            'conv4': x_conv4,
+            # 'conv1': x_conv1,
+            # 'conv2': x_conv2,
+            # 'conv3': x_conv3,
+            # 'conv4': x_conv4,
         }
-        # print("final shape from sparse conv is ", ret.shape)
+        # print("final shape from sparse conv is ", ret.shape); exit()
         return ret, multi_scale_voxel_features
+
+
+if __name__ == '__main__':
+    import torch, time
+    
+    backbone = SpMiddleResNetFHD(type="SpMiddleResNetFHD", num_input_features=5, ds_factor=8)
+    sizes = 0
+    for p in backbone.parameters():
+        sizes += np.prod(list(p.shape))
+    print(sizes)
+    # print(backbone)
+    backbone.cuda()
+    input_features = torch.load('input_features.pt')
+    coors = torch.load('coor.pt')
+    batch_size = torch.load('batch_size.pt')
+    input_shape = torch.load('input_shape.pt')
+    
+    time_list = []
+    for i in range(1000):
+        tick = time.time()
+        backbone(input_features, coors, batch_size, input_shape)
+        time_list.append(time.time() - tick)
+    
+    print("elapsed time: {}".format(sum(time_list)/len(time_list)))
+    # input_features, data["coors"], data["batch_size"], data["input_shape"]

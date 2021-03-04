@@ -1,6 +1,8 @@
 ''' REF: https://github.com/tianweiy/CenterPoint
 '''
-from utils.profiler import timeit
+from omegaconf.omegaconf import OmegaConf
+from addict import Dict
+from tools.profiler import timeit
 import logging
 from collections import defaultdict
 from utils.bbox import box_torch_ops
@@ -9,6 +11,8 @@ from ..misc import kaiming_init, Sequential
 from torch import double, nn
 from models.losses.centernet_loss import FastFocalLoss, RegLoss
 
+from models.registry import BBOX_HEADS
+from tools.profiler import timeit
 import copy 
 try:
     from tools.ops.dcn import DeformConv
@@ -16,45 +20,45 @@ except:
     print("Deformable Convolution not built!")
 
 
-class FeatureAdaption(nn.Module):
-    """Feature Adaption Module.
+# class FeatureAdaption(nn.Module):
+#     """Feature Adaption Module.
 
-    Feature Adaption Module is implemented based on DCN v1.
-    It uses anchor shape prediction rather than feature map to
-    predict offsets of deformable conv layer.
+#     Feature Adaption Module is implemented based on DCN v1.
+#     It uses anchor shape prediction rather than feature map to
+#     predict offsets of deformable conv layer.
 
-    Args:
-        in_channels (int): Number of channels in the input feature map.
-        out_channels (int): Number of channels in the output feature map.
-        kernel_size (int): Deformable conv kernel size.
-        deformable_groups (int): Deformable conv group size.
-    """
+#     Args:
+#         in_channels (int): Number of channels in the input feature map.
+#         out_channels (int): Number of channels in the output feature map.
+#         kernel_size (int): Deformable conv kernel size.
+#         deformable_groups (int): Deformable conv group size.
+#     """
 
-    def __init__(self,
-                 in_channels,
-                 out_channels,
-                 kernel_size=3,
-                 deformable_groups=4):
-        super(FeatureAdaption, self).__init__()
-        offset_channels = kernel_size * kernel_size * 2
-        self.conv_offset = nn.Conv2d(
-            in_channels, deformable_groups * offset_channels, 1, bias=True)
-        self.conv_adaption = DeformConv(
-            in_channels,
-            out_channels,
-            kernel_size=kernel_size,
-            padding=(kernel_size - 1) // 2,
-            deformable_groups=deformable_groups)
-        self.relu = nn.ReLU(inplace=True)
-        self.init_offset()
+#     def __init__(self,
+#                  in_channels,
+#                  out_channels,
+#                  kernel_size=3,
+#                  deformable_groups=4):
+#         super(FeatureAdaption, self).__init__()
+#         offset_channels = kernel_size * kernel_size * 2
+#         self.conv_offset = nn.Conv2d(
+#             in_channels, deformable_groups * offset_channels, 1, bias=True)
+#         self.conv_adaption = DeformConv(
+#             in_channels,
+#             out_channels,
+#             kernel_size=kernel_size,
+#             padding=(kernel_size - 1) // 2,
+#             deformable_groups=deformable_groups)
+#         self.relu = nn.ReLU(inplace=True)
+#         self.init_offset()
 
-    def init_offset(self):
-        self.conv_offset.weight.data.zero_()
+#     def init_offset(self):
+#         self.conv_offset.weight.data.zero_()
 
-    def forward(self, x,):
-        offset = self.conv_offset(x)
-        x = self.relu(self.conv_adaption(x, offset))
-        return x
+#     def forward(self, x,):
+#         offset = self.conv_offset(x)
+#         x = self.relu(self.conv_adaption(x, offset))
+#         return x
 
 class SepHead(nn.Module):
     def __init__(
@@ -103,61 +107,61 @@ class SepHead(nn.Module):
 
         return ret_dict
 
-class DCNSepHead(nn.Module):
-    def __init__(
-        self,
-        in_channels,
-        num_cls,
-        heads,
-        head_conv=64,
-        final_kernel=1,
-        bn=False,
-        init_bias=-2.19,
-        **kwargs,
-    ):
-        super(DCNSepHead, self).__init__(**kwargs)
+# class DCNSepHead(nn.Module):
+#     def __init__(
+#         self,
+#         in_channels,
+#         num_cls,
+#         heads,
+#         head_conv=64,
+#         final_kernel=1,
+#         bn=False,
+#         init_bias=-2.19,
+#         **kwargs,
+#     ):
+#         super(DCNSepHead, self).__init__(**kwargs)
 
-        # feature adaptation with dcn
-        # use separate features for classification / regression
-        self.feature_adapt_cls = FeatureAdaption(
-            in_channels,
-            in_channels,
-            kernel_size=3,
-            deformable_groups=4) 
+#         # feature adaptation with dcn
+#         # use separate features for classification / regression
+#         self.feature_adapt_cls = FeatureAdaption(
+#             in_channels,
+#             in_channels,
+#             kernel_size=3,
+#             deformable_groups=4) 
         
-        self.feature_adapt_reg = FeatureAdaption(
-            in_channels,
-            in_channels,
-            kernel_size=3,
-            deformable_groups=4)  
+#         self.feature_adapt_reg = FeatureAdaption(
+#             in_channels,
+#             in_channels,
+#             kernel_size=3,
+#             deformable_groups=4)  
 
-        # heatmap prediction head 
-        self.cls_head = Sequential(
-            nn.Conv2d(in_channels, head_conv,
-            kernel_size=3, padding=1, bias=True),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(head_conv, num_cls,
-                kernel_size=3, stride=1, 
-                padding=1, bias=True)
-        )
-        self.cls_head[-1].bias.data.fill_(init_bias)
+#         # heatmap prediction head 
+#         self.cls_head = Sequential(
+#             nn.Conv2d(in_channels, head_conv,
+#             kernel_size=3, padding=1, bias=True),
+#             nn.BatchNorm2d(64),
+#             nn.ReLU(inplace=True),
+#             nn.Conv2d(head_conv, num_cls,
+#                 kernel_size=3, stride=1, 
+#                 padding=1, bias=True)
+#         )
+#         self.cls_head[-1].bias.data.fill_(init_bias)
 
-        # other regression target 
-        self.task_head = SepHead(in_channels, heads, head_conv=head_conv, bn=bn, final_kernel=final_kernel)
-
-
-    def forward(self, x):    
-        center_feat = self.feature_adapt_cls(x)
-        reg_feat = self.feature_adapt_reg(x)
-
-        cls_score = self.cls_head(center_feat)
-        ret = self.task_head(reg_feat)
-        ret['hm'] = cls_score
-
-        return ret
+#         # other regression target 
+#         self.task_head = SepHead(in_channels, heads, head_conv=head_conv, bn=bn, final_kernel=final_kernel)
 
 
+#     def forward(self, x):    
+#         center_feat = self.feature_adapt_cls(x)
+#         reg_feat = self.feature_adapt_reg(x)
+
+#         cls_score = self.cls_head(center_feat)
+#         ret = self.task_head(reg_feat)
+#         ret['hm'] = cls_score
+
+#         return ret
+
+@BBOX_HEADS.register_module
 class CenterHead(nn.Module):
     def __init__(
         self,
@@ -175,7 +179,7 @@ class CenterHead(nn.Module):
         **kwargs
     ):
         super(CenterHead, self).__init__()
-
+        common_heads = Dict(OmegaConf.to_container(common_heads))
         num_classes = [len(t["class_names"]) for t in tasks]
         self.class_names = [t["class_names"] for t in tasks]
         self.code_weights = code_weights 
@@ -221,6 +225,7 @@ class CenterHead(nn.Module):
                     SepHead(share_conv_channel, heads, bn=True, init_bias=init_bias, final_kernel=3)
                 )
             else:
+                raise NotImplementedError
                 self.tasks.append(
                     DCNSepHead(share_conv_channel, num_cls, heads, bn=True, init_bias=init_bias, final_kernel=3)
                 )
@@ -243,7 +248,7 @@ class CenterHead(nn.Module):
         y = torch.clamp(x.sigmoid_(), min=1e-4, max=1-1e-4)
         return y
     
-    
+    # @timeit
     def loss(self, example, preds_dicts, **kwargs):
         rets = []
         for task_id, preds_dict in enumerate(preds_dicts):

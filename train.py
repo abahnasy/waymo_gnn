@@ -19,12 +19,14 @@ import torch
 
 from torch.nn.utils import clip_grad
 
-from tools.builder import build_dataloader, build_dataset, build_model, build_optimizer
+from tools.builder import build_dataloader, build_dataset, build_optimizer
+from models.model_builder import build_model
 from utils.log_buffer import LogBuffer
 from utils.checkpoint import load_checkpoint, save_checkpoint
 # from utils.config import Config
 
-
+# import wandb
+# wandb.init()
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -119,16 +121,20 @@ def move_batch_to_gpu(batch_data):
             batch_data_tensor[k] = v # keep the rest on cpu
     return batch_data_tensor
 
-@hydra.main(config_name="configs/config")
+# @hydra.main(config_name="conf/config_temp")
+@hydra.main(config_path="conf", config_name="config")
 def main(cfg : DictConfig) -> None:
     
-    # get original path
-    original_dir = hydra.utils.get_original_cwd()
-    
-    # get current working directory
-    working_dir = os.getcwd()
-    print("Working directory : {}".format(working_dir))
-    
+    # get current working directory, use hydra working directory of resume from already existing one
+    if not OmegaConf.is_none(cfg, 'resume_from'):
+        # get original path
+        # original_dir = hydra.utils.get_original_cwd()
+        working_dir = "/".join(hydra.utils.to_absolute_path(cfg.resume_from).split('/')[:-1]) # get folder path
+        assert os.path.exists(working_dir) == True
+    else:
+        working_dir = os.getcwd()
+        print("Working directory : {}".format(working_dir))
+
     # create logger
     logger = get_root_logger(working_dir)
     
@@ -146,7 +152,7 @@ def main(cfg : DictConfig) -> None:
     print("dataloader", len(data_loader.dataset))
     
     # build validation dataset
-    val_ds = build_dataset(cfg, type='val', logger=logger)
+    val_ds = build_dataset(cfg, type='val-train', logger=logger)
     print(len(val_ds))
     
     # build val loader
@@ -154,7 +160,8 @@ def main(cfg : DictConfig) -> None:
     print("datalaoder", len(val_data_loader.dataset))
     
     # build model
-    model = build_model(cfg, logger=logger)
+    model = build_model(cfg.model, logger=logger)
+    print(model)
 
     # build optimizer
     total_steps = cfg.total_epochs * len(data_loader)
@@ -217,7 +224,7 @@ def main(cfg : DictConfig) -> None:
             # model.forward() does the loss calculations
             time_forward = time.time()
             losses = model(batch_data_tensor, return_loss=True)
-            # print("elapsed forward time: {}".format(time.time() - time_forward))
+            print("elapsed forward + loss time: {}".format(time.time() - time_forward))
             log_vars = OrderedDict()
             loss = sum(losses["loss"])
             for loss_name, loss_value in losses.items():

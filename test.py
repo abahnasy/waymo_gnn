@@ -98,7 +98,7 @@ def save_pred(pred, root):
     # args = parser.parse_args()
     # return args
 
-@hydra.main(config_name="configs/config")
+@hydra.main(config_path="conf", config_name="config")
 def main(cfg : DictConfig) -> None:
 
     # get original path

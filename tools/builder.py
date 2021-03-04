@@ -12,21 +12,33 @@ from waymo_dataset.registry import DATASETS, PIPELINES
 from waymo_dataset.waymo import WaymoDataset
 from waymo_dataset.pipelines import *
 # model stages
-from models.detectors.voxelnet import VoxelNet
-from models.readers.voxel_encoder import VoxelFeatureExtractorV3
-from models.backbones.scn import SpMiddleResNetFHD
-from models.necks.rpn import RPN
-from models.bbox_heads.center_head import CenterHead
+
+# from models.readers import *
+# from models.detectors.voxelnet import VoxelNet
+# from models.readers.voxel_encoder import VoxelFeatureExtractorV3
+# from models.backbones.scn import SpMiddleResNetFHD
+# from models.necks.rpn import RPN
+# from models.bbox_heads.center_head import CenterHead
 
 def is_str(x):
     """Whether the input is an string instance."""
     return isinstance(x, six.string_types)
 
 def build_from_cfg_dict(cfg, registry):
-    print(OmegaConf.to_yaml(cfg))
-    assert isinstance(cfg, DictConfig) and "type" in cfg
-    obj_type = cfg.select("type")
-    args = Dict(OmegaConf.to_container(cfg.cfg))
+    '''
+    example for the configurations that should be found in the yaml file, type is the class type and cfg is the configuration dictionary
+    reader:
+        type: VoxelFeatureExtractor
+        cfg:
+            num_input_features: 5
+    '''
+    # print(OmegaConf.to_yaml(cfg))
+    assert isinstance(cfg, DictConfig) 
+    assert "type" in cfg
+    obj_type = OmegaConf.select(cfg, "type")
+    
+    # args = Dict(OmegaConf.to_container(cfg.cfg))
+    args = cfg.cfg.copy()
     if is_str(obj_type):
         obj_cls = registry.get(obj_type)
     elif inspect.isclass(obj_type):
@@ -35,6 +47,8 @@ def build_from_cfg_dict(cfg, registry):
         raise TypeError(
             "type must be a str or valid type, but got {}".format(type(obj_type))
         )
+    if obj_cls is None:
+        raise TypeError("cannot identify class type")
     return obj_cls(**args)
 
 def build_dataset(cfg, type='train', logger=None):
@@ -52,14 +66,27 @@ def build_dataset(cfg, type='train', logger=None):
             nsweeps= cfg.nsweeps,
             load_interval = 1
         )
-    elif type == 'val':
-        train_pipeline = [
-            build_from_cfg_dict(stage_configs, PIPELINES) for stage_name, stage_configs in cfg.train_pipeline.items()
+    elif type == 'val-train': # prepare heatmaps for loss calculations, no augmentation or sampler
+        val_train_pipeline = [
+            build_from_cfg_dict(stage_configs, PIPELINES) for stage_name, stage_configs in cfg.val_train_pipeline.items()
         ]
         dataset = WaymoDataset(
             info_path=cfg.val_anno,
             root_path=cfg.data_root,
-            pipeline=train_pipeline, #TODO: fix this later, temp use of train pipeline !
+            pipeline=val_train_pipeline,
+            # ann_file = cfg.val_anno,
+            test_mode=True,
+            nsweeps= cfg.nsweeps,
+            class_names=cfg.class_names,
+        )
+    elif type == 'val': # skip heatmaps, not needed in evaluation
+        val_pipeline = [
+            build_from_cfg_dict(stage_configs, PIPELINES) for stage_name, stage_configs in cfg.val_pipeline.items()
+        ]
+        dataset = WaymoDataset(
+            info_path=cfg.val_anno,
+            root_path=cfg.data_root,
+            pipeline=val_pipeline,
             # ann_file = cfg.val_anno,
             test_mode=True,
             nsweeps= cfg.nsweeps,
@@ -99,22 +126,7 @@ def build_dataloader(dataset, type, cfg, logger=None):
     )
     return data_loader
 
-def build_model(cfg, logger=None):
-    reader_cfg = Dict(OmegaConf.to_container(cfg.model.reader))
-    backbone_cfg = Dict(OmegaConf.to_container(cfg.model.backbone))
-    neck_cfg = Dict(OmegaConf.to_container(cfg.model.neck))
-    bbox_head = Dict(OmegaConf.to_container(cfg.model.bbox_head))
-    model = VoxelNet(
-        reader = VoxelFeatureExtractorV3(**reader_cfg),
-        backbone = SpMiddleResNetFHD(**backbone_cfg),
-        neck = RPN(**neck_cfg, logger=logger),
-        bbox_head = CenterHead(**bbox_head),
-        train_cfg= None, # cfg.train_cfg,
-        test_cfg=cfg.model.test_cfg,
-        pretrained= cfg.model
-    )
-    # model.CLASSES = ds.CLASSES
-    return model
+
 
 def build_optimizer(model, optim_cfg, lr_config, total_steps):
        

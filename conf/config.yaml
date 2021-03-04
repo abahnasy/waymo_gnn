@@ -1,0 +1,242 @@
+defaults:
+  - model: single_stage
+# Debugging Flags
+dry_run: False
+verbose_timing: False
+# Datset Configurations
+data_root: data/Waymo
+train_anno: data/Waymo/infos_train_01sweeps_filter_zero_gt.pkl
+val_anno: data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl
+test_anno: None
+total_epochs: 36
+batch_size: 4
+num_workers: 8
+resume_from: work_dirs/single_stage/reduced_voxel_grid/epoch_28.pth # used for training, override suing cmd
+checkpoint:  # used for testing, override using cmd
+output_dir: ckpts_results
+seed: 
+nsweeps: 1
+class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+tasks: # paired_with
+  - num_classes: 3
+    class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+
+# Train Pipeline
+train_pipeline:
+  stage_1:
+    type: LoadPointCloudFromFile
+    cfg:
+      dataset_type: WaymoDataset
+      random_select: True
+      npoints: 20000   
+  stage_2:
+    type: LoadPointCloudAnnotations
+    cfg:
+      dataset_type: WaymoDataset
+      with_bbox: True
+  stage_3:
+    type: Preprocess
+    cfg:
+      dataset_type: WaymoDataset
+      mode: train
+      shuffle_points: True
+      global_rot_noise: [-0.78539816, 0.78539816]
+      global_scale_noise: [0.95, 1.05]
+      db_sampler:
+        type: GT-AUG
+        enable: False
+        db_info_path: data/Waymo/dbinfos_train_1sweeps_withvelo.pkl
+        sample_groups:
+          - VEHICLE: 15
+          - PEDESTRIAN: 10
+          - CYCLIST: 10
+        db_prep_steps: 
+          filter_by_min_num_points:
+              VEHICLE: 5
+              PEDESTRIAN: 5
+              CYCLIST: 5
+          filter_by_difficulty: [-1]
+        global_random_rotation_range_per_object: [0, 0]
+        rate: 1.0
+      class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+  stage_4:
+    type: Voxelization 
+    cfg:
+      dataset_type: WaymoDataset
+      range: [-75.2, -75.2, -2, 75.2, 75.2, 4]
+      voxel_size: [0.2, 0.2, 0.15]
+      max_points_in_voxel: 10
+      max_voxel_num: 150000
+  stage_5:
+    type: AssignLabel
+    cfg:
+      dataset_type: WaymoDataset
+      tasks: # paired_with
+        - num_class: 3
+          class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+      out_size_factor: 8 # TODO: get_downsample_factor(model)
+      dense_reg: 1
+      gaussian_overlap: 0.1
+      max_objs: 500
+      min_radius: 2
+  stage_6:
+    type: Reformat
+    cfg:
+      dataset_type: WaymoDataset
+
+# Val-train Pipeline
+val_train_pipeline:
+  stage_1:
+    type: LoadPointCloudFromFile
+    cfg:
+      dataset_type: WaymoDataset
+      random_select: True
+      npoints: 20000   
+  stage_2:
+    type: LoadPointCloudAnnotations
+    cfg:
+      dataset_type: WaymoDataset
+      with_bbox: True
+  stage_3:
+    type: Preprocess
+    cfg:
+      dataset_type: WaymoDataset
+      mode: train
+      shuffle_points: False
+      class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+      no_augmentation: True
+  stage_4:
+    type: Voxelization 
+    cfg:
+      dataset_type: WaymoDataset
+      range: [-75.2, -75.2, -2, 75.2, 75.2, 4]
+      voxel_size: [0.2, 0.2, 0.15]
+      max_points_in_voxel: 10
+      max_voxel_num: 150000
+  stage_5:
+    type: AssignLabel
+    cfg:
+      dataset_type: WaymoDataset
+      tasks: # paired_with
+        - num_class: 3
+          class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+      out_size_factor: 8 # TODO: get_downsample_factor(model)
+      dense_reg: 1
+      gaussian_overlap: 0.1
+      max_objs: 500
+      min_radius: 2
+  stage_6:
+    type: Reformat
+    cfg:
+      dataset_type: WaymoDataset
+# Val/Test Pipeline
+val_pipeline:
+  stage_1:
+    type: LoadPointCloudFromFile
+    cfg:
+      dataset_type: WaymoDataset
+      random_select: True
+      npoints: 20000   
+  stage_2:
+    type: LoadPointCloudAnnotations
+    cfg:
+      dataset_type: WaymoDataset
+      with_bbox: True
+  stage_3:
+    type: Preprocess
+    cfg:
+      dataset_type: WaymoDataset
+      mode: val
+      shuffle_points: False
+  stage_4:
+    type: Voxelization 
+    cfg:
+      dataset_type: WaymoDataset
+      range: [-75.2, -75.2, -2, 75.2, 75.2, 4]
+      voxel_size: [0.2, 0.2, 0.15]
+      max_points_in_voxel: 10
+      max_voxel_num: 150000
+  stage_5:
+    type: AssignLabel
+    cfg:
+      dataset_type: WaymoDataset
+      tasks: # paired_with
+        - num_class: 3
+          class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+      out_size_factor: 8 # TODO: get_downsample_factor(model)
+      dense_reg: 1
+      gaussian_overlap: 0.1
+      max_objs: 500
+      min_radius: 2
+  stage_6:
+    type: Reformat
+    cfg:
+      dataset_type: WaymoDataset
+# Model Configurations moved to configurations groups
+# model:
+#   type: VoxelNet
+#   cfg:
+#     pretrained: False
+#     reader:
+#       type: VoxelFeatureExtractorV3
+#       num_input_features: 5
+#     backbone:
+#       type: SpMiddleResNetFHD
+#       num_input_features: 5
+#       ds_factor: 8
+#     neck:
+#       type: RPN
+#       layer_nums: [5, 5]
+#       ds_layer_strides: [1, 2]
+#       ds_num_filters: [128, 256]
+#       us_layer_strides: [1, 2]
+#       us_num_filters: [256, 256]
+#       num_input_features: 256
+#     bbox_head:
+#       type: CenterHead
+#       in_channels: 512 # sum([256, 256])
+#       tasks: # pair_with
+#         - num_classes: 3
+#           class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+#       dataset: waymo
+#       weight: 2
+#       code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+#       common_heads: 
+#         reg: [2, 2]
+#         height: [1, 2]
+#         dim: [3, 2]
+#         rot: [2, 2] # (output_channel, num_conv)
+#     test_cfg:
+#       post_center_limit_range: [-80, -80, -10.0, 80, 80, 10.0]
+#       nms:
+#         use_rotate_nms: True
+#         use_multi_class_nms: False
+#         nms_pre_max_size: 4096
+#         nms_post_max_size: 500
+#         nms_iou_threshold: 0.7
+#       score_threshold: 0.1
+#       pc_range: [-75.2, -75.2]
+#       out_size_factor: 8
+#       voxel_size: [0.1, 0.1]
+# Optimizer Configurations
+optimizer:
+  type: adam
+  amsgrad: 0.0
+  wd: 0.01
+  fixed_wd: True
+  moving_average: False
+  grad_clip:
+    max_norm: 35
+    norm_type: 2
+lr:
+  type: one_cycle
+  lr_max: 0.003
+  moms: [0.95, 0.85]
+  div_factor: 10.0
+  pct_start: 0.4
+      
+
+
+
+      
+    

@@ -27,8 +27,8 @@ class Preprocess(object):
         
         self.mode = kwargs.get('mode')
         if self.mode == "train":
-            self.global_rotation_noise = kwargs.get("global_rot_noise", None)
-            self.global_scaling_noise = kwargs.get("global_scale_noise", None)
+            self.global_rotation_noise = list(kwargs.get("global_rot_noise", None)) if kwargs.get("global_rot_noise", None) is not None else None
+            self.global_scaling_noise = list(kwargs.get("global_scale_noise", None)) if kwargs.get("global_rot_noise", None) is not None else None
             self.class_names = kwargs.get("class_names")
             assert len(self.class_names) != 0
             self.db_sampler = kwargs.get('db_sampler', None)
@@ -46,7 +46,7 @@ class Preprocess(object):
                 from utils.sampler.preprocess import DBFilterByDifficulty, DBFilterByMinNumPoint, DataBasePreprocessor
                 preprocessors = []    
                 if "filter_by_difficulty" in self.db_sampler['db_prep_steps']:
-                    v = self.db_sampler['db_prep_steps']["filter_by_difficulty"]
+                    v = list(self.db_sampler['db_prep_steps']["filter_by_difficulty"])
                     preprocessors.append(DBFilterByDifficulty(v, logger=logger))
                 elif "filter_by_min_num_points" in self.db_sampler['db_prep_steps']:
                     v = self.db_sampler['db_prep_steps']["filter_by_min_num_points"]
@@ -57,7 +57,7 @@ class Preprocess(object):
                     groups = self.db_sampler['sample_groups'],
                     db_prepor = db_prepor, 
                     rate = self.db_sampler['rate'], 
-                    global_rot_range = self.db_sampler['global_random_rotation_range_per_object'], 
+                    global_rot_range = list(self.db_sampler['global_random_rotation_range_per_object']), 
                     logger=logger
                 )
             else:

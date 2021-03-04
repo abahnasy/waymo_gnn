@@ -46,7 +46,11 @@
 
 
 # train cmds
-```python3 ./tools/train.py CONFIG_PATH```
+```python3 ./train.py```
+
+* for training the second stage
+
+```python3 ./train.py model=two_stage```
 
 # test cmds
 ```python3 ./test.py --work_dir work_dirs/dry_run --checkpoint work_dirs/dry_run/latest.pth --speed_test```

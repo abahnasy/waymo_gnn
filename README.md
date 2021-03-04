@@ -96,3 +96,4 @@
 # Acknowledgment
 * `https://github.com/poodarchu/Det3D`
 * `https://github.com/open-mmlab/mmdetection`
+* `https://github.com/open-mmlab/OpenPCDet`

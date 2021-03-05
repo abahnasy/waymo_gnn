@@ -10,15 +10,14 @@ import warnings
 
 import logging
 import pickle, copy
-from torch.utils.data import dataloader
-from models.readers.voxel_encoder import VoxelFeatureExtractorV3
-import random, itertools
-import argparse
+
+import random
+
 from tqdm import tqdm
 
 import numpy as np
 import torch
-from torch.nn.utils import clip_grad
+
 
 import hydra
 from omegaconf import DictConfig, OmegaConf
@@ -26,12 +25,47 @@ from addict import Dict
 
 import os, time
 from pathlib import Path
-from collections import OrderedDict
 
-from utils.log_buffer import LogBuffer
-from utils.checkpoint import load_checkpoint, save_checkpoint
-from tools.builder import build_dataloader, build_dataset, build_model, build_optimizer
+from utils.checkpoint import load_checkpoint
+from tools.builder import build_dataloader, build_dataset
+from models.model_builder import build_model
 
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+
+def move_batch_to_gpu(batch_data):
+    batch_data_tensor = {}
+    for k, v in batch_data.items(): 
+        if k in [
+            # "anchors", 
+            # "anchors_mask", 
+            # "reg_targets", 
+            # "reg_weights", 
+            # "labels", 
+            "hm", 
+            "anno_box", 
+            "ind", 
+            "mask", 
+            'cat'
+        ]:
+            batch_data_tensor[k] = [item.to(device) for item in v] # move dictionaries
+        elif k in [ 
+            "voxels",
+            "points",
+            "num_voxels",
+            "num_points",
+            "gt_boxes_and_cls",
+            "coordinates",
+            # "bev_map",
+            # "cyv_voxels",
+            # "cyv_num_voxels",
+            # "cyv_coordinates",
+            # "cyv_num_points",
+        ]:
+            if k == 'points': continue #DEBUG: skip loading points to gpu, not needed
+            batch_data_tensor[k] = v.to(device) # move single items
+        else:
+            batch_data_tensor[k] = v # keep the rest on cpu
+    return batch_data_tensor
 
 def set_random_seed(seed):
     random.seed(seed)
@@ -84,19 +118,6 @@ def save_pred(pred, root):
     with open(os.path.join(root, "prediction.pkl"), "wb") as f:
         pickle.dump(pred, f)
 
-# def parse_args():
-#     parser = argparse.ArgumentParser(description="Test a detector")
-#     # parser.add_argument("config", help="train config file path")
-#     parser.add_argument("--work_dir", required=True, help="the dir to save logs and models")
-#     parser.add_argument(
-#         "--checkpoint", help="the dir to checkpoint which the model read from"
-#     )
-    
-    # parser.add_argument("--local_rank", type=int, default=0)
-    # parser.add_argument("--seed", type=int, default=None, help="random seed")
-
-    # args = parser.parse_args()
-    # return args
 
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg : DictConfig) -> None:
@@ -126,12 +147,16 @@ def main(cfg : DictConfig) -> None:
     
     
     # build model
-    model = build_model(cfg, logger=logger)
+    model = build_model(cfg.model, logger=logger)
 
-
+    if OmegaConf.is_none(cfg, "checkpoint"):
+        raise ValueError("Checkpoint must be defined")
     checkpoint_path = hydra.utils.to_absolute_path(cfg.checkpoint)
+    checkpoint_dir_path = "/".join(checkpoint_path.split("/")[:-1])
     checkpoint = load_checkpoint(model, checkpoint_path, map_location="cpu")
     checkpoint_name = cfg.checkpoint.split('/')[-1].split('.')[0] # ex. epoch_1
+    
+    
     
     model = model.cuda()
     model.eval()
@@ -143,38 +168,10 @@ def main(cfg : DictConfig) -> None:
     tick_inference = time.time()
     for i, batch_data in enumerate(tqdm(data_loader)):
         with torch.no_grad():
+
+            batch_data_tensor = move_batch_to_gpu(batch_data)
             
-            # outputs = batch_processor(
-            #     model, data_batch, train_mode=False, local_rank=args.local_rank,
-            # )
-            example_torch = {}
-            float_names = ["voxels", "bev_map"]
-            for k, v in batch_data.items():
-                if k in ["anchors", "anchors_mask", "reg_targets", "reg_weights", "labels"]:
-                    example_torch[k] = [res.to(device, non_blocking=False) for res in v]
-                elif k in [
-                    "voxels",
-                    "bev_map",
-                    "coordinates",
-                    "num_points",
-                    "points",
-                    "num_voxels",
-                    #"cyv_voxels",
-                    #"cyv_num_voxels",
-                    #"cyv_coordinates",
-                    #"cyv_num_points"
-                ]:
-                    example_torch[k] = v.to(device, non_blocking=False)
-                # elif k == "calib":
-                #     calib = {}
-                #     for k1, v1 in v.items():
-                #         # calib[k1] = torch.tensor(v1, dtype=dtype, device=device)
-                #         calib[k1] = torch.tensor(v1).to(device, non_blocking=False)
-                #     example_torch[k] = calib
-                else:
-                    example_torch[k] = v
-            
-            outputs = model(example_torch, return_loss=False)
+            outputs = model(batch_data_tensor, return_loss=False)
 
         for output in outputs:
             token = output["metadata"]["token"]
@@ -196,8 +193,8 @@ def main(cfg : DictConfig) -> None:
 
     # save_pred(predictions, args.work_dir) # TODO: check later
     print("saving prediction bin file")
-    output_dir = hydra.utils.to_absolute_path(cfg.output_dir)
-    output_dir = os.path.join(output_dir, checkpoint_name) # add checkpoint name
+    # output_dir = hydra.utils.to_absolute_path(cfg.output_dir)
+    output_dir = os.path.join(checkpoint_dir_path, checkpoint_name) # add checkpoint name, create output folder at the same folder of the loaded checkpoint
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     result_dict, _ = val_ds.evaluation(copy.deepcopy(predictions), output_dir=output_dir)
 

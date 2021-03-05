@@ -1,0 +1,90 @@
+# Model Configurations
+model:
+  type: TwoStageDetector # available Types [SingleStageDetector, TwoStageDetector]
+  cfg:
+    NMS_POST_MAXSIZE: 500
+    num_point: 5
+    freeze: True
+    first_stage_cfg:
+      type: VoxelNet
+      cfg:
+        pretrained: work_dirs/single_stage/reduced_voxel_grid/epoch_28.pth
+        reader:
+          type: VoxelFeatureExtractorV3
+          cfg:
+            num_input_features: 5
+        backbone:
+          type: SpMiddleResNetFHD
+          cfg:
+            num_input_features: 5
+            ds_factor: 8
+        neck:
+          type: RPN
+          cfg:
+            layer_nums: [5, 5]
+            ds_layer_strides: [1, 2]
+            ds_num_filters: [128, 256]
+            us_layer_strides: [1, 2]
+            us_num_filters: [256, 256]
+            num_input_features: 256
+        bbox_head:
+          type: CenterHead
+          cfg:
+            in_channels: 512 # sum([256, 256])
+            tasks: # pair_with
+              - num_classes: 3
+                class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
+            dataset: waymo
+            weight: 2
+            code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+            common_heads: 
+              reg: [2, 2]
+              height: [1, 2]
+              dim: [3, 2]
+              rot: [2, 2] # (output_channel, num_conv)
+        test_cfg:
+          post_center_limit_range: [-80, -80, -10.0, 80, 80, 10.0]
+          nms:
+            use_rotate_nms: True
+            use_multi_class_nms: False
+            nms_pre_max_size: 4096
+            nms_post_max_size: 500
+            nms_iou_threshold: 0.7
+          score_threshold: 0.1
+          pc_range: [-75.2, -75.2]
+          out_size_factor: 8
+          voxel_size: [0.2, 0.2]
+    second_stage_modules:
+      - type: BEVFeatureExtractor
+        cfg:
+          pc_start: [-75.2, -75.2]
+          voxel_size: [0.2, 0.2]
+          out_stride: 8
+    roi_head:
+      type: RoIHead
+      cfg:
+        code_size: 7
+        input_channels: 2560 # 512*5
+        model_cfg:
+          CLASS_AGNOSTIC: True
+          SHARED_FC: [256, 256]
+          CLS_FC: [256, 256]
+          REG_FC: [256, 256]
+          DP_RATIO: 0.3
+          TARGET_CONFIG:
+              ROI_PER_IMAGE: 128
+              FG_RATIO: 0.5
+              SAMPLE_ROI_BY_EACH_CLASS: True
+              CLS_SCORE_TYPE: roi_iou
+              CLS_FG_THRESH: 0.75
+              CLS_BG_THRESH: 0.25
+              CLS_BG_THRESH_LO: 0.1
+              HARD_BG_RATIO: 0.8
+              REG_FG_THRESH: 0.55
+          LOSS_CONFIG: 
+              CLS_LOSS: BinaryCrossEntropy
+              REG_LOSS: L1
+              LOSS_WEIGHTS:
+                rcnn_cls_weight: 1.0
+                rcnn_reg_weight: 1.0
+                code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]

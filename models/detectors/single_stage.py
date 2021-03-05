@@ -1,5 +1,8 @@
 import torch.nn as nn
 import logging
+
+import hydra
+
 from models.registry import DETECTORS
 # from .. import builder
 
@@ -11,6 +14,10 @@ from models.model_builder import build_backbone, build_bbox_head,build_reader, b
 
 @DETECTORS.register_module
 class SingleStageDetector(nn.Module):
+    """
+    Args:
+        pretrained: path to .pth file which containes the desired checkpoint
+    """
     def __init__(
         self,
         reader,
@@ -37,12 +44,13 @@ class SingleStageDetector(nn.Module):
         if pretrained is None:
             return 
         try:
-            logger = logging.getLogger()
+            logger = logging.getLogger(__name__)
+            pretrained = hydra.utils.to_absolute_path(pretrained) # correct path to original
             logger.info("load model from: {}".format(pretrained))
             load_checkpoint(self, pretrained, strict=False)
             print("init weight from {}".format(pretrained))
         except:
-            print("no pretrained model at {}".format(pretrained))
+            raise ValueError("no pretrained model at {}".format(pretrained))
             
     def extract_feat(self, data):
         input_features = self.reader(data)

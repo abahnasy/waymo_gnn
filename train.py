@@ -107,7 +107,7 @@ def move_batch_to_gpu(batch_data):
             "points",
             "num_voxels",
             "num_points",
-            "gt_boxes_and_cls"
+            "gt_boxes_and_cls",
             "coordinates",
             # "bev_map",
             # "cyv_voxels",
@@ -162,6 +162,7 @@ def main(cfg : DictConfig) -> None:
     # build model
     model = build_model(cfg.model, logger=logger)
     print(model)
+    
 
     # build optimizer
     total_steps = cfg.total_epochs * len(data_loader)

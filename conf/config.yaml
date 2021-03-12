@@ -8,12 +8,12 @@ data_root: data/Waymo
 train_anno: data/Waymo/infos_train_01sweeps_filter_zero_gt.pkl
 val_anno: data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl
 test_anno: None
-total_epochs: 36
+total_epochs: 80
 batch_size: 4
 num_workers: 8
-resume_from: work_dirs/single_stage/reduced_voxel_grid/epoch_28.pth # used for training, override suing cmd
-checkpoint:  # used for testing, override using cmd
-output_dir: ckpts_results
+resume_from: # work_dirs/single_stage/reduced_voxel_grid/epoch_50.pth # used for training, override suing cmd
+checkpoint:  # work_dirs/single_stage/reduced_voxel_grid/epoch_34.pth # used for testing, override using cmd
+# output_dir: ckpts_results
 seed: 
 nsweeps: 1
 class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']

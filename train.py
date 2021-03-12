@@ -63,21 +63,21 @@ def get_root_logger(working_dir):
 
     return logger
 
-def get_downsample_factor(model_config):
-    try:
-        neck_cfg = model_config["neck"]
-    except:
-        model_config = model_config['first_stage_cfg']
-        neck_cfg = model_config['neck']
-    downsample_factor = np.prod(neck_cfg.get("ds_layer_strides", [1]))
-    if len(neck_cfg.get("us_layer_strides", [])) > 0:
-        downsample_factor /= neck_cfg.get("us_layer_strides", [])[-1]
+# def get_downsample_factor(model_config):
+#     try:
+#         neck_cfg = model_config["neck"]
+#     except:
+#         model_config = model_config['first_stage_cfg']
+#         neck_cfg = model_config['neck']
+#     downsample_factor = np.prod(neck_cfg.get("ds_layer_strides", [1]))
+#     if len(neck_cfg.get("us_layer_strides", [])) > 0:
+#         downsample_factor /= neck_cfg.get("us_layer_strides", [])[-1]
 
-    backbone_cfg = model_config['backbone']
-    downsample_factor *= backbone_cfg["ds_factor"]
-    downsample_factor = int(downsample_factor)
-    assert downsample_factor > 0
-    return downsample_factor
+#     backbone_cfg = model_config['backbone']
+#     downsample_factor *= backbone_cfg["ds_factor"]
+#     downsample_factor = int(downsample_factor)
+#     assert downsample_factor > 0
+#     return downsample_factor
 
 
 def set_random_seed(seed):
@@ -121,11 +121,11 @@ def move_batch_to_gpu(batch_data):
             batch_data_tensor[k] = v # keep the rest on cpu
     return batch_data_tensor
 
-# @hydra.main(config_name="conf/config_temp")
+
 @hydra.main(config_path="conf", config_name="config")
 def main(cfg : DictConfig) -> None:
     
-    # get current working directory, use hydra working directory of resume from already existing one
+    # get current working directory, use hydra working directory or resume from already existing one
     if not OmegaConf.is_none(cfg, 'resume_from'):
         # get original path
         # original_dir = hydra.utils.get_original_cwd()
@@ -201,6 +201,11 @@ def main(cfg : DictConfig) -> None:
             optimizer.load_state_dict(checkpoint["optimizer"])
         logger.info("resumed epoch %d, iter %d", _epoch, _iter)
     
+    
+    # from tools.profiler import AdvancedProfiler
+    # prof = AdvancedProfiler("profiler_ouput.txt")
+
+    
     # Epochs Loop
     for epoch in range(_epoch, max_epochs):
         logger.info("Staring Epoch {}".format(epoch))
@@ -224,6 +229,7 @@ def main(cfg : DictConfig) -> None:
 
             # model.forward() does the loss calculations
             time_forward = time.time()
+            # with prof.profile("forward pass"):
             losses = model(batch_data_tensor, return_loss=True)
             print("elapsed forward + loss time: {}".format(time.time() - time_forward))
             log_vars = OrderedDict()
@@ -243,6 +249,7 @@ def main(cfg : DictConfig) -> None:
             # )
             time_backward = time.time()
             # outputs["loss"].backward()
+            # with prof.profile("time backward"):
             loss.backward()
             print("elapsed backward time {}".format(time.time() - time_backward))
             if not OmegaConf.is_none(cfg.optimizer, 'grad_clip'):

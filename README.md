@@ -14,7 +14,8 @@
 * build cuda layers of dcn and iou3d_nms `bash setup.sh`
 * alias to data folder
 * run the downloader to download in the alias folder
-
+* install MinkowskiEngine
+   * follow the steps mentioned in: ``` https://github.com/NVIDIA/MinkowskiEngine```
 * install open_waymo_dataset library to extract data
 ```pip install waymo-open-dataset-tf-2-3-0```
 

@@ -2,6 +2,7 @@
 '''
 from omegaconf.omegaconf import OmegaConf
 from addict import Dict
+from torch.nn.modules.loss import CrossEntropyLoss
 from tools.profiler import timeit
 import logging
 from collections import defaultdict
@@ -9,7 +10,7 @@ from utils.bbox import box_torch_ops
 import torch
 from ..misc import kaiming_init, Sequential
 from torch import double, nn
-from models.losses.centernet_loss import FastFocalLoss, RegLoss
+from models.losses.centernet_loss import FastFocalLoss, RegLoss, MyCrossEntropyLoss
 
 from models.registry import BBOX_HEADS
 from tools.profiler import timeit
@@ -68,7 +69,7 @@ class SepHead(nn.Module):
         head_conv=64,
         final_kernel=1,
         bn=False,
-        init_bias=-2.19,
+        init_bias=-2.19, # REF: https://leimao.github.io/blog/Focal-Loss-Explained/ check section 'Focal Loss Trick'
         **kwargs,
     ):
         super(SepHead, self).__init__(**kwargs)
@@ -190,6 +191,7 @@ class CenterHead(nn.Module):
         self.num_classes = num_classes
 
         self.crit = FastFocalLoss()
+        # self.crit = MyCrossEntropyLoss()
         self.crit_reg = RegLoss()
 
         self.box_n_dim = 9 if 'vel' in common_heads else 7  
@@ -256,7 +258,7 @@ class CenterHead(nn.Module):
             preds_dict['hm'] = self._sigmoid(preds_dict['hm'])
 
             hm_loss = self.crit(preds_dict['hm'], example['hm'][task_id], example['ind'][task_id], example['mask'][task_id], example['cat'][task_id])
-
+            
             target_box = example['anno_box'][task_id]
             # reconstruct the anno_box from multiple reg heads
             if self.dataset in ['waymo', 'nuscenes']:

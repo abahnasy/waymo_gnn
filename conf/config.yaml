@@ -9,13 +9,14 @@ train_anno: data/Waymo/infos_train_01sweeps_filter_zero_gt.pkl
 val_anno: data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl
 test_anno: None
 total_epochs: 80
-batch_size: 4
+batch_size: 2
 num_workers: 8
 resume_from: # work_dirs/single_stage/reduced_voxel_grid/epoch_50.pth # used for training, override suing cmd
 checkpoint:  # work_dirs/single_stage/reduced_voxel_grid/epoch_34.pth # used for testing, override using cmd
 # output_dir: ckpts_results
 seed: 
 nsweeps: 1
+voxel_size: [0.1, 0.1, 0.15]
 class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
 tasks: # paired_with
   - num_classes: 3
@@ -40,6 +41,7 @@ train_pipeline:
       dataset_type: WaymoDataset
       mode: train
       shuffle_points: True
+      no_augmentation: True
       global_rot_noise: [-0.78539816, 0.78539816]
       global_scale_noise: [0.95, 1.05]
       db_sampler:
@@ -64,8 +66,8 @@ train_pipeline:
     cfg:
       dataset_type: WaymoDataset
       range: [-75.2, -75.2, -2, 75.2, 75.2, 4]
-      voxel_size: [0.2, 0.2, 0.15]
-      max_points_in_voxel: 10
+      voxel_size: ${voxel_size}
+      max_points_in_voxel: 5
       max_voxel_num: 150000
   stage_5:
     type: AssignLabel
@@ -110,8 +112,8 @@ val_train_pipeline:
     cfg:
       dataset_type: WaymoDataset
       range: [-75.2, -75.2, -2, 75.2, 75.2, 4]
-      voxel_size: [0.2, 0.2, 0.15]
-      max_points_in_voxel: 10
+      voxel_size: ${voxel_size}
+      max_points_in_voxel: 5
       max_voxel_num: 150000
   stage_5:
     type: AssignLabel
@@ -153,8 +155,8 @@ val_pipeline:
     cfg:
       dataset_type: WaymoDataset
       range: [-75.2, -75.2, -2, 75.2, 75.2, 4]
-      voxel_size: [0.2, 0.2, 0.15]
-      max_points_in_voxel: 10
+      voxel_size: ${voxel_size}
+      max_points_in_voxel: 5
       max_voxel_num: 150000
   stage_5:
     type: AssignLabel

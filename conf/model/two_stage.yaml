@@ -53,12 +53,12 @@ model:
           score_threshold: 0.1
           pc_range: [-75.2, -75.2]
           out_size_factor: 8
-          voxel_size: [0.2, 0.2]
+          voxel_size: [0.1, 0.1]
     second_stage_modules:
       - type: BEVFeatureExtractor
         cfg:
           pc_start: [-75.2, -75.2]
-          voxel_size: [0.2, 0.2]
+          voxel_size: [0.1, 0.1]
           out_stride: 8
     roi_head:
       type: RoIHead

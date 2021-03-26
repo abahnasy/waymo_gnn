@@ -8,7 +8,7 @@ model:
       cfg:
         num_input_features: 5
     backbone:
-      type: SpMiddleResNetFHD
+      type: MinkowskiSpMiddleResNetFHD
       cfg:
         num_input_features: 5
         ds_factor: 8
@@ -47,4 +47,4 @@ model:
       score_threshold: 0.1
       pc_range: [-75.2, -75.2]
       out_size_factor: 8
-      voxel_size: [0.2, 0.2]
+      voxel_size: [0.1, 0.1]

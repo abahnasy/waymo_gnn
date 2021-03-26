@@ -209,13 +209,16 @@ class SpMiddleResNetFHD(nn.Module):
         # input: # [41, 1600, 1408]
         # Waymo input grid [1504, 1504, 40]
         sparse_shape = np.array(input_shape[::-1]) + [1, 0, 0]
+        # sparse_shape = np.array(input_shape[::-1])
 
         coors = coors.int()
         # t = time.time()
         ret = spconv.SparseConvTensor(voxel_features, coors, sparse_shape, batch_size)
+        # print("size after creating sparse Conv", ret.spatial_shape)
         # print("\t\t spconv: creating the sparse vector", time.time() - t); t = time.time()
 
         x = self.conv_input(ret)
+        # print("size after input conv", x.spatial_shape)
         # print("\t\t spconv: input conv", time.time() - t); t = time.time()
 
         # x_conv1 = self.conv1(x)
@@ -223,23 +226,32 @@ class SpMiddleResNetFHD(nn.Module):
         # x_conv3 = self.conv3(x_conv2)
         # x_conv4 = self.conv4(x_conv3)
         x = self.conv1(x)
+        # print("x shape after the first conv", x.spatial_shape)
         # print("\t\t spconv: conv 1", time.time() - t); t = time.time()
         x = self.conv2(x)
+        # print("size after conv2", x.spatial_shape)
         # print("\t\t spconv: conv 2", time.time() - t); t = time.time()
         x = self.conv3(x)
+        # print("size after conv3", x.spatial_shape)
         # print("\t\t spconv: conv 3", time.time() - t); t = time.time()
         x = self.conv4(x)
+        # print("size after conv4", x.spatial_shape)
         # print("\t\t spconv: conv 4", time.time() - t); t = time.time()
         
 
         ret = self.extra_conv(x)
+        # print("size after extra_conv", ret.spatial_shape)
+        # print(ret.indices.shape)
+        # print(ret.indices.min(dim=0))
+        # print(ret.indices.max(dim=0))
         # print("\t\t spconv: conv extra", time.time() - t); t = time.time()
 
         ret = ret.dense()
         # print("\t\t spconv: dense output", time.time() - t); t = time.time()
-
+        # print("outoput from CML after dense is ", ret.shape)
         N, C, D, H, W = ret.shape
         ret = ret.view(N, C * D, H, W)
+        # print("outoput from CML after mering depth and channel dimensions is ", ret.shape)
 
         multi_scale_voxel_features = {
             # 'conv1': x_conv1,
@@ -261,16 +273,3 @@ if __name__ == '__main__':
     print(sizes)
     # print(backbone)
     backbone.cuda()
-    input_features = torch.load('input_features.pt')
-    coors = torch.load('coor.pt')
-    batch_size = torch.load('batch_size.pt')
-    input_shape = torch.load('input_shape.pt')
-    
-    time_list = []
-    for i in range(1000):
-        tick = time.time()
-        backbone(input_features, coors, batch_size, input_shape)
-        time_list.append(time.time() - tick)
-    
-    print("elapsed time: {}".format(sum(time_list)/len(time_list)))
-    # input_features, data["coors"], data["batch_size"], data["input_shape"]

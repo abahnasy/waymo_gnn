@@ -1,4 +1,5 @@
 from models.backbones.scn import SpMiddleResNetFHD
+from models.backbones.mink_scn import MinkowskiSpMiddleResNetFHD
 from models.bbox_heads.center_head import CenterHead
 from models.necks.rpn import RPN
 from models.readers.voxel_encoder import VoxelFeatureExtractorV3

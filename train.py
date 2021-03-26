@@ -167,6 +167,7 @@ def main(cfg : DictConfig) -> None:
     # build optimizer
     total_steps = cfg.total_epochs * len(data_loader)
     optimizer, lr_scheduler = build_optimizer(model, cfg.optimizer, cfg.lr, total_steps)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=2e-5); lr_scheduler = None
 
     # move to GPU
     model.cuda() # train only on GPU
@@ -182,7 +183,7 @@ def main(cfg : DictConfig) -> None:
     tf_viz_val = TfVisualizer(log_dir, 'val') # logging every batch
     
     max_epochs = cfg.total_epochs
-    batch_val_int = 20 # evaute one batch every 20 training batches
+    batch_val_int = 50 # evaute one batch every 100 training batches
     max_iter = max_epochs*len(data_loader) # TODO: rename to train_data_loader
     _epoch = 0
     _iter = 0
@@ -265,9 +266,9 @@ def main(cfg : DictConfig) -> None:
                 exit()
             
             # check batch validation
-            if (i+1) % batch_val_int == 0:
+            if i % batch_val_int == 0:
                 model.eval()
-                num_eval_batches = 5
+                num_eval_batches = 10
                 total_loss = OrderedDict()
                 for i, batch_data in enumerate(val_data_loader):
                     if i == num_eval_batches:

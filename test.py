@@ -190,11 +190,12 @@ def main(cfg : DictConfig) -> None:
     predictions = {}
     for p in all_predictions:
         predictions.update(p)
-
-    # save_pred(predictions, args.work_dir) # TODO: check later
+    
+    output_dir = os.path.join(checkpoint_dir_path, checkpoint_name) # add checkpoint name, create output folder at the same folder of the loaded checkpoint
+    save_pred(predictions, checkpoint_dir_path) # TODO: Predictions for tracking
     print("saving prediction bin file")
     # output_dir = hydra.utils.to_absolute_path(cfg.output_dir)
-    output_dir = os.path.join(checkpoint_dir_path, checkpoint_name) # add checkpoint name, create output folder at the same folder of the loaded checkpoint
+    
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     result_dict, _ = val_ds.evaluation(copy.deepcopy(predictions), output_dir=output_dir)
 

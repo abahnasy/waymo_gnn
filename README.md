@@ -9,12 +9,15 @@
 
 ### Steps
 
+* create conda env
+* install conda dependencies # TODO
 * TODO: GCloud access and gcp cmd tools
 * TODO: reuqired installations !
 * build cuda layers of dcn and iou3d_nms `bash setup.sh`
 * alias to data folder
 * run the downloader to download in the alias folder
-
+* install MinkowskiEngine
+  * follow the steps mentioned in: ``` https://github.com/NVIDIA/MinkowskiEngine```
 * install open_waymo_dataset library to extract data
 ```pip install waymo-open-dataset-tf-2-3-0```
 
@@ -28,16 +31,26 @@
 
 * preprocess data, extract annotaions and point clouds for every frame into piclke file
 
-    * train set 
+  * train set 
     ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_training/segment-*.tfrecord'  --root_path '.data/Waymo/train/'```
 
-    * validation set 
+  * validation set 
     ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path '.data/Waymo/val/'```
 
-    * testing set 
+  * testing set 
     ```CUDA_VISIBLE_DEVICES=-1 python det3d/datasets/waymo/waymo_converter.py --tfrecord_path 'WAYMO_DATASET_ROOT/tfrecord_testing/segment-*.tfrecord'  --root_path 'WAYMO_DATASET_ROOT/test/'```
 
 * create info files
+  ```
+  # One Sweep Infos 
+  python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split train --nsweeps=1
+  python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split val --nsweeps=1
+  python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split test --nsweeps=1
+  # Two Sweep Infos
+  python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split train --nsweeps=2
+  python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split val --nsweeps=2
+  python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split test --nsweeps=2
+  ```
 # train
 ``` waymo_dataset/create_data.py waymo_data_prep --root_path=./data/Waymo --split train --nsweeps=1 --sub_sampled=1.0 ```
 # val

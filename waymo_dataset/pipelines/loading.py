@@ -26,7 +26,7 @@ def read_single_waymo(obj):
     return points 
 
 def read_single_waymo_sweep(sweep):
-    raise ValueError('Check it later !')
+    # raise ValueError('Check it later !')
     obj = get_obj(sweep['path'])
 
     points_xyz = obj["lidars"]["points_xyz"]

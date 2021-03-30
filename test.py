@@ -192,7 +192,7 @@ def main(cfg : DictConfig) -> None:
         predictions.update(p)
     
     output_dir = os.path.join(checkpoint_dir_path, checkpoint_name) # add checkpoint name, create output folder at the same folder of the loaded checkpoint
-    save_pred(predictions, checkpoint_dir_path) # TODO: Predictions for tracking
+    save_pred(predictions, output_dir) # TODO: Predictions for tracking
     print("saving prediction bin file")
     # output_dir = hydra.utils.to_absolute_path(cfg.output_dir)
     

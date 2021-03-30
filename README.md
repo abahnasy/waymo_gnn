@@ -32,13 +32,13 @@
 * preprocess data, extract annotaions and point clouds for every frame into piclke file
 
   * train set 
-    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_training/segment-*.tfrecord'  --root_path '.data/Waymo/train/'```
+    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_training/segment-*.tfrecord'  --root_path './data/Waymo/train/'```
 
   * validation set 
-    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path '.data/Waymo/val/'```
+    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/val/'```
 
   * testing set 
-    ```CUDA_VISIBLE_DEVICES=-1 python det3d/datasets/waymo/waymo_converter.py --tfrecord_path 'WAYMO_DATASET_ROOT/tfrecord_testing/segment-*.tfrecord'  --root_path 'WAYMO_DATASET_ROOT/test/'```
+    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/test/'```
 
 * create info files
   ```

@@ -1,0 +1,2 @@
+info_path: data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl
+max_epochs: 1

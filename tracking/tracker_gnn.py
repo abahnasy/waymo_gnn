@@ -105,7 +105,7 @@ class GNNMOT(nn.Module):
         det_appear_feats = self.appear_extractor(det_feats)
         det_motion_feats = self.det_motion_extractor(torch.from_numpy(det_boxes3d).float())
         track_appear_feats = self.appear_extractor(track_feats)
-        track_motion_feats = self.track_motion_extractor(torch.from_numpy(track_boxes3d).float())
+        track_motion_feats = self.track_motion_extractor(track_boxes3d.float())
 
         det_feats = torch.cat((det_appear_feats, det_motion_feats), dim=1)
         track_feats = torch.cat((track_appear_feats, track_motion_feats), dim=1)
@@ -199,6 +199,7 @@ class GNNMOT(nn.Module):
 
         # print(h.shape)
         # print(G.adj())
+        rety=urb 
         
 class LSTMBuffer():
     """

@@ -1,8 +1,10 @@
 
 from dgl.transform import add_edges
+from networkx.generators.random_graphs import gnm_random_graph
 from networkx.linalg.graphmatrix import adjacency_matrix
 from networkx.readwrite.json_graph.adjacency import adjacency_graph
 import torch
+from torch._C import Value
 import torch.nn as nn
 import torch.nn.functional as F
 import dgl
@@ -15,9 +17,63 @@ from tracking.lstm import LSTMfeat
 from tracking.mlp import TwoLayersMLP, EdgeRegressionMLP
 from utils.bbox import box_np_ops
 from utils.visualizations import get_corners_from_labels_array
+import logging
+# A logger for this file
+log = logging.getLogger(__name__)
+
+# class LSTMBuffer():
+#     """
+#     buffer: {
+#         track_id: [5,9] 
+#     }
+#     """
+#     def __init__(self, maxsize = 5):
+#         #key: tracking_id, value: [[],[],[],[],[]] latest T tracks
+#         self.buffer = {} # Every item [N, 9]
+#         self.max_size = maxsize
+#         self.current_size = 0
+
+#     def push_tracks(self, tracks):
+#         """ tracks: [M,9]
+#         """
+        
+#         for track in tracks:
+#             tracking_id = track['tracking_id']
+#             if tracking_id in self.buffer.keys():
+#                 self.buffer[tracking_id] = self.buffer[tracking_id][1::]
+#                 self.buffer[tracking_id].append(track['box3d'])
+#             else:
+#                 # for the first time
+#                 self.buffer[tracking_id] = [track['box3d'] for i in range(5)] # repeat five times # TODO: magic number !
+    
+#     def prepare_gnn_tracking_input(self, tracks):
+#         ret = np.zeros((len(tracks), self.max_size, 9)) # TODO: magic number !
+#         for i in range(len(tracks)):
+#             tracking_id = tracks[i]['tracking_id']
+#             ret[i] = self.buffer[tracking_id]
+#         return ret
+
+
+
+
+# class TrackerGNN(object):
+#     def __init__(self, max_age=0, max_dist={}, score_thresh=0.1):
+#         self.max_age = max_age
+#         self.WAYMO_CLS_VELOCITY_ERROR = max_dist 
+#         self.WAYMO_TRACKING_NAMES = WAYMO_TRACKING_NAMES
+#         self.score_thresh = score_thresh 
+#         self.gnn_matcher = GNNMOT()
+        
+#         self.reset()
+
+
+#     def reset(self):
+#         self.id_count = 0
+#         self.tracks = []
+#         self.lstm_buffer = LSTMBuffer(maxsize=5) # remember the last five tracks
 
 def verify_matched_indices(matched_indeics):
-    """ Test function to make sure unique id has been assigned
+    """ Test function to make sure a unique id has been assigned
     """
     m_det = {}
     m_track = {}
@@ -77,8 +133,111 @@ class GNNMOT(nn.Module):
         self.gnn_conv3 = EdgeConv(128, 128)
         self.gnn_conv4 = EdgeConv(128, 128)
         self.edge_regr = EdgeRegressionMLP(input_size=128, hidden_size=64, output_size=1)
+        self.mode = 'train'
+        self.triplet_loss_alpha = 5
+        self.affinity_ce_loss_criterion = nn.CrossEntropyLoss()
+        self.affinity_bce_loss_criterion = nn.BCELoss()
     
-    def forward(self, det_pc_in_box, det_boxes3d, track_pc_in_box, track_boxes3d, graph_adj_matrix):
+    
+    def _compute_layer_loss(self, node_feats, regr_affinity_matrix, gt_affinity_matrix):
+        """
+        REF: https://arxiv.org/abs/2006.07327 Section 3.3
+        """
+        log.debug("Entered _compute_layer_loss Function")
+        # calculate triplet loss
+        N, M = gt_affinity_matrix.shape
+        assert node_feats.shape == (N+M, 128)
+        # triplet loss
+        for idx in range(M):
+            track_obj_feat = node_feats[N+idx, :]
+            assert track_obj_feat.shape == torch.Size([128]) # TODO: magic number
+            if gt_affinity_matrix[:,idx].sum() == 0: #if match not found
+                log.debug("Not matched track !")
+                # minimize over the second term in the triplet loss function only !
+                triplet_2 = torch.min(torch.abs(track_obj_feat - node_feats[0:N, :]).sum(dim=1))
+                triplet_loss = torch.max(triplet_2 + torch.tensor(self.triplet_loss_alpha), 0)[0] #return value 
+                
+            else: # if match found
+                matched_det_idx = torch.nonzero(gt_affinity_matrix[:,idx], as_tuple=False).item()
+                # assert matched_det.shape == 1, "Error in gt affinity matrix, cannot have more than one match" # now handled by .item() function
+                matched_det_obj_feat = node_feats[matched_det_idx, :]
+                unmatched_det_obj_feat = torch.cat((node_feats[0:matched_det_idx,:],node_feats[matched_det_idx+1:N,:]), dim=0)
+                assert unmatched_det_obj_feat.shape[0] == N-1
+                unmatched_track_obj_feat = torch.cat((node_feats[N:N+idx,:],node_feats[N+idx+1:N+M,:]), dim=0)
+                assert unmatched_track_obj_feat.shape[0] == M-1
+                triplet_1 = torch.abs((track_obj_feat - matched_det_idx).sum())
+                
+                triplet_2 = 0
+                if unmatched_det_obj_feat.shape[0] != 0:
+                    triplet_2 = torch.min(torch.abs(track_obj_feat - unmatched_det_obj_feat).sum(dim=1))
+
+                triplet_3 = 0
+                if unmatched_track_obj_feat.shape[0] != 0:
+                    triplet_3 = torch.min(torch.abs(matched_det_obj_feat - unmatched_track_obj_feat).sum(dim=1))
+                
+                # print(type(matched_det_idx), matched_det_obj_feat.shape)
+                # print(unmatched_det_obj_feat.shape)
+                triplet_loss = torch.max(triplet_1 - triplet_2 - triplet_3 + torch.tensor(self.triplet_loss_alpha), 0)[0] # return value
+        
+        # affinity loss
+        aff_loss = self.affinity_bce_loss_criterion(regr_affinity_matrix.view(-1,1).unsqueeze(0), gt_affinity_matrix.view(-1,1).unsqueeze(0).float())
+        
+        # affinity loss calculations 
+        # calculations on NxM
+        try:
+            not_matched_indices = torch.where(gt_affinity_matrix.sum(dim=1))[0].tolist()
+            match_indices = [i for i in range(N) if i not in not_matched_indices]
+            if len(match_indices) != 0:
+                aff_loss += self.affinity_ce_loss_criterion(regr_affinity_matrix[match_indices, :], gt_affinity_matrix[match_indices,:].argmax(dim=1))
+            if len(not_matched_indices) != 0:
+                aff_loss += torch.log(torch.exp(regr_affinity_matrix[not_matched_indices,:]).sum())
+            # calculations on MxN
+            not_matched_indices = torch.where(gt_affinity_matrix.sum(dim=0))[0].tolist()
+            match_indices = [i for i in range(M) if i not in not_matched_indices]
+            if len(match_indices) != 0:
+                aff_loss += self.affinity_ce_loss_criterion(regr_affinity_matrix[:, match_indices].T, gt_affinity_matrix[:, match_indices].argmax(dim=0).T)
+            if len(not_matched_indices) != 0:
+                aff_loss += torch.log(torch.exp(regr_affinity_matrix[:, not_matched_indices]).sum())
+        except:
+            log.debug("NxM calculations")
+            log.debug(regr_affinity_matrix[match_indices, :].shape)
+            log.debug(gt_affinity_matrix[match_indices,:].shape)
+            log.debug("MxN calculations")
+            log.debug(regr_affinity_matrix[:, match_indices].shape)
+            log.debug(gt_affinity_matrix[:, match_indices].shape)
+
+        return aff_loss + triplet_loss
+        
+
+
+    def _compute_affinity_matrix(self, node_feats, N, M):
+        edges = torch.zeros((N*M, 128))
+        c = 0
+        assert node_feats.shape == torch.Size([N+M, 128])
+        for i in range(N):
+            for j in range(M):
+                # if affinity_matrix[i, j] != 0:
+                    edges[c] = node_feats[j] - node_feats[i] # track - det features
+                    c += 1
+        edges = self.edge_regr(edges)
+        return edges.reshape(N,M) # regressed affinity matrix
+
+            
+            
+            
+        
+        
+        
+    
+    def forward(
+        self, 
+        det_pc_in_box, 
+        det_boxes3d, 
+        track_pc_in_box, 
+        track_boxes3d, 
+        graph_adj_matrix, 
+        gt_affinity_matrix
+    ):
         """
         Args:
             det_list: data of detected objects
@@ -87,10 +246,12 @@ class GNNMOT(nn.Module):
         Return:
             matching: [N,2] matched indices
         """
+        log.debug("Entered Forward Function")
+
         N = len(det_pc_in_box)
         M = len(track_pc_in_box)
         assert graph_adj_matrix.shape[0] == N+M
-        num_points = det_pc_in_box[0].shape[0] # num points in pc subsampled
+        num_points = det_pc_in_box[0].shape[0] if len(det_pc_in_box) != 0 else track_pc_in_box[0].shape[0] # num points in pc subsampled
         
         det_feats = np.zeros((N,5, num_points))
         for i in range(N):
@@ -110,40 +271,57 @@ class GNNMOT(nn.Module):
         det_feats = torch.cat((det_appear_feats, det_motion_feats), dim=1)
         track_feats = torch.cat((track_appear_feats, track_motion_feats), dim=1)
         
-        print(det_feats.shape, track_feats.shape)
+        # print(det_feats.shape, track_feats.shape)
         graph_feat = torch.cat((det_feats, track_feats), dim = 0) # appearance and motion concatenated
-        print(graph_feat.shape)
+        # print(graph_feat.shape)
         # create graph 
         src = []
         dst = []
+        
         for i in range(N+M):
             for j in range(N+M):
                 if graph_adj_matrix[i][j] != 0:
                     src.append(i)
                     dst.append(j)
+        
+        
+        # log.debug(len(src))
+        # log.debug(len(dst))
+        # assert len(src) != 0
+        # assert len(dst) != 0
         src = torch.tensor(src)
         dst = torch.tensor(dst)
         
         
 
-        
-        G = dgl.graph((src, dst))
+        G = dgl.DGLGraph()
+        G.add_nodes(N+M)
+        G.add_edges(src, dst)
         G = dgl.add_self_loop(G) # consider self features
         
-        
-        assert G.num_nodes() == graph_feat.shape[0]
+        try:
+            assert G.num_nodes() == graph_feat.shape[0]
+        except:
+            log.debug("number of graph nodes is {}".format(G.num_nodes()))
+            log.debug("shape of graph features is {}".format(graph_feat.shape))
+            exit()
         
 
-        concat_feat = None
+        
         # === Graph Convolutions === #
         h = self.gnn_conv1(G, graph_feat)
         h = F.relu(h)
+        regr_affinity_matrix = self._compute_affinity_matrix(h, N, M)
+        loss = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         h = self.gnn_conv2(G, h)
         h = F.relu(h)
+        loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         h = self.gnn_conv3(G, h)
         h = F.relu(h)
+        loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         h = self.gnn_conv4(G, h)
         h = F.relu(h)
+        loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         # TODO: Cosine Similarity, L2, MLP for constructing the affinity matrix
         # implement edge regression and return the matched indices !
         # consturct M x N Affinity Matrix
@@ -158,13 +336,13 @@ class GNNMOT(nn.Module):
         # print(adj_mat.sum())
         affinity_matrix = adj_mat[0:N, N:N+M]
         # print(affinity_matrix.sum())
-        edges = torch.zeros((int(affinity_matrix.sum()), 128))
+        # edges = torch.zeros((int(affinity_matrix.sum()), 128))
+        edges = torch.zeros((N*M, 128))
         
         c = 0
-        print(h.shape)
         for i in range(N):
             for j in range(M):
-                if affinity_matrix[i, j] != 0:
+                # if affinity_matrix[i, j] != 0:
                     edges[c] = h[j] - h[i] # track - det features
                     c += 1
 
@@ -172,90 +350,34 @@ class GNNMOT(nn.Module):
         c = 0
         for i in range(N):
             for j in range(M):
-                if affinity_matrix[i, j] != 0:
+                # if affinity_matrix[i, j] != 0:
                     affinity_matrix[i, j] = afiinity_values[c].item()
                     c += 1
-                else:
-                    affinity_matrix[i, j] = 10 # invalid value
+                # else:
+                    # affinity_matrix[i, j] = 10 # invalid value
         # print(affinity_matrix.sum()); exit()
-        # matching assingment
-        matched_indices = []
-        # protected case from parent function !
-        # if dist.shape[1] == 0:
-        #     return np.array(matched_indices, np.int32).reshape(-1, 2)
-        for i in range(N):
-            print(affinity_matrix[i])
-            j = affinity_matrix[i].argmin()
-            if affinity_matrix[i][j] < 10: # any value above sigmoid output to mark as invalid cell
-                affinity_matrix[:, j] = 10 #invalidate this option when choosed
-                matched_indices.append([i, j])
-        # return np.array(matched_indices, np.int32).reshape(-1, 2)
-
-        print(np.array(matched_indices, np.int32).reshape(-1, 2))
-
-        assert  verify_matched_indices(matched_indices) == True
-
-        exit()
-
-        # print(h.shape)
-        # print(G.adj())
-        rety=urb 
-        
-class LSTMBuffer():
-    """
-    buffer: {
-        track_id: [5,9] 
-    }
-    """
-    def __init__(self, maxsize = 5):
-        #key: tracking_id, value: [[],[],[],[],[]] latest T tracks
-        self.buffer = {} # Every item [N, 9]
-        self.max_size = maxsize
-        self.current_size = 0
-
-    def push_tracks(self, tracks):
-        """ tracks: [M,9]
-        """
-        
-        for track in tracks:
-            tracking_id = track['tracking_id']
-            if tracking_id in self.buffer.keys():
-                self.buffer[tracking_id] = self.buffer[tracking_id][1::]
-                self.buffer[tracking_id].append(track['box3d'])
-            else:
-                # for the first time
-                self.buffer[tracking_id] = [track['box3d'] for i in range(5)] # repeat five times # TODO: magic number !
-    
-    def prepare_gnn_tracking_input(self, tracks):
-        ret = np.zeros((len(tracks), self.max_size, 9)) # TODO: magic number !
-        for i in range(len(tracks)):
-            tracking_id = tracks[i]['tracking_id']
-            ret[i] = self.buffer[tracking_id]
-        return ret
-
-
-
-
-class TrackerGNN(object):
-    def __init__(self, max_age=0, max_dist={}, score_thresh=0.1):
-        self.max_age = max_age
-        self.WAYMO_CLS_VELOCITY_ERROR = max_dist 
-        self.WAYMO_TRACKING_NAMES = WAYMO_TRACKING_NAMES
-        self.score_thresh = score_thresh 
-        self.gnn_matcher = GNNMOT()
-        
-        self.reset()
-
-
-    def reset(self):
-        self.id_count = 0
-        self.tracks = []
-        self.lstm_buffer = LSTMBuffer(maxsize=5) # remember the last five tracks
-        
+        if self.mode == 'train':
+            return loss, affinity_matrix
+        else:
+            raise ValueError("Inference mode is not ready yet !!")
+            # matching assingment
+            matched_indices = []
+            # protected case from parent function !
+            # if dist.shape[1] == 0:
+            #     return np.array(matched_indices, np.int32).reshape(-1, 2)
+            for i in range(N):
+                print(affinity_matrix[i])
+                j = affinity_matrix[i].argmin()
+                if affinity_matrix[i][j] < 10: # any value above sigmoid output to mark as invalid cell
+                    affinity_matrix[:, j] = 10 #invalidate this option when choosed
+                    matched_indices.append([i, j])
+            # return np.array(matched_indices, np.int32).reshape(-1, 2)
+            print(np.array(matched_indices, np.int32).reshape(-1, 2))
+            assert  verify_matched_indices(matched_indices) == True
 
 
     def step(self, det_boxes, point_cloud, time_lag):
-        """
+        """ used in inference only 
         Args:
             det_boxes: list of current frame detections
             point_cloud: point cloud of the current frame used to extract appearance features
@@ -330,7 +452,7 @@ class TrackerGNN(object):
             track_boxes3d = self.lstm_buffer.prepare_gnn_tracking_input(self.tracks)
             assert track_boxes3d.shape[1] == 5 # TODO: magic number !
             assert track_boxes3d.shape[2] == 9
-            
+            # forward function
             matched_indices = self.gnn_matcher(det_pc_in_box, det_boxes3d, track_pc_in_box, track_boxes3d, graph_adj_matrix)
             raise ValueError("Missing implementation here !!")
         else:  # first few frame

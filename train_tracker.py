@@ -5,6 +5,7 @@
 # read segment
 # create annotations
 import os, logging, pickle
+from torch.utils.data.dataloader import DataLoader
 
 from tqdm import tqdm
 import hydra
@@ -12,7 +13,7 @@ from omegaconf import DictConfig, OmegaConf
 from addict import Dict
 import numpy as np
 import torch
-from torch._C import MobileOptimizerType, Value
+
 
 from tracking.utils import reorganize_info, transform_box
 from viz_predictions import get_obj
@@ -61,83 +62,96 @@ def main(cfg : DictConfig) -> None:
     #     'graph_adj_matrix': None,
     #     'gt_affinity_matrix': None
     # }
-    WHITELIST = ['VEHICLE', 'PEDESTRIAN', 'CYCLIST'] #TODO: move to config #equivalent to WAYMO_TRACKING_NAMES
-    TYPE_LIST = ['UNKNOWN', 'VEHICLE', 'PEDESTRIAN', 'SIGN', 'CYCLIST']
-    max_dist = {
-        'VEHICLE': 5,
-        'PEDESTRIAN': 1,
-        'CYCLIST': 1
-    }
+    # WHITELIST = ['VEHICLE', 'PEDESTRIAN', 'CYCLIST'] #TODO: move to config #equivalent to WAYMO_TRACKING_NAMES
+    # TYPE_LIST = ['UNKNOWN', 'VEHICLE', 'PEDESTRIAN', 'SIGN', 'CYCLIST']
+    # max_dist = {
+    #     'VEHICLE': 5,
+    #     'PEDESTRIAN': 1,
+    #     'CYCLIST': 1
+    # }
     
-    with open(hydra.utils.to_absolute_path(cfg.info_path), 'rb') as f:
-        infos = pickle.load(f)
-        infos = reorganize_info(infos) # dictionary indexed by tokens
+    # with open(hydra.utils.to_absolute_path(cfg.info_path), 'rb') as f:
+    #     infos = pickle.load(f)
+    #     infos = reorganize_info(infos) # dictionary indexed by tokens
 
         
-    train_data_extract = [] # data extracted and prepared for training
-    log.info("Extracting Training data")
-    for token in tqdm(infos.keys()):
-        frame_id = token.split('_')[3][:-4]
-        # print(frame_id)
-        record = {} # train data container for annotated frame
-        info = infos[token]            
-        # get point cloud
-        pc_path = info['path']
-        ref_obj = get_obj(hydra.utils.to_absolute_path(pc_path))
-        pc = ref_obj['lidars']['points_xyz'] # get point cloud
-        pc_feat = ref_obj['lidars']['points_feature'] # get point cloud features
-        pc = np.concatenate((pc, pc_feat), axis = 1)
-        # get transformation matrix
-        anno_path = info['anno_path']
-        ref_obj = get_obj(hydra.utils.to_absolute_path(anno_path))
-        pose = np.reshape(ref_obj['veh_to_global'], [4, 4])
-        # get ground truth ids for tracking
-        num_points_in_gt = np.array([ann['num_points'] for ann in ref_obj['objects']])
-        gt_global_ids = np.array([obj['name'] for obj in ref_obj['objects']])
-        gt_boxes = np.array([ann['box'] for ann in ref_obj['objects']]).reshape(-1, 9)
-        gt_names = np.array([TYPE_LIST[ann['label']] for ann in ref_obj['objects']])
-        # remove empty boxes
-        mask_not_zero = (num_points_in_gt >= 5).reshape(-1) #TODO: magic number !
-        gt_boxes = gt_boxes[mask_not_zero, :].astype(np.float32) 
-        gt_names = gt_names[mask_not_zero].astype(str)
-        gt_global_ids = gt_global_ids[mask_not_zero].astype(str)
-        num_points_in_gt = num_points_in_gt[mask_not_zero]
-        assert gt_boxes.shape[0] == gt_names.shape[0]
-        assert gt_global_ids.shape[0] == gt_names.shape[0]
-        # mask whitelist
-        mask_whitelist = np.array([True if label in WHITELIST else False for label in gt_names])
-        gt_boxes = gt_boxes[mask_whitelist, :].astype(np.float32) 
-        gt_names = gt_names[mask_whitelist].astype(str)
-        gt_global_ids = gt_global_ids[mask_whitelist].astype(str)
-        num_points_in_gt = num_points_in_gt[mask_whitelist]
-        assert gt_boxes.shape[0] == gt_names.shape[0]
-        assert gt_global_ids.shape[0] == gt_names.shape[0]
-        assert gt_names.shape[0] == num_points_in_gt.shape[0]
-        #create box_map
-        boxes_map = {}
-        for i in range(gt_boxes.shape[0]):
-            boxes_map[gt_global_ids[i]] = gt_boxes[i]
+    # train_data_extract = [] # data extracted and prepared for training
+    # log.info("Extracting Training data")
+    # for token in tqdm(infos.keys()):
+    #     frame_id = token.split('_')[3][:-4]
+    #     # print(frame_id)
+    #     record = {} # train data container for annotated frame
+    #     info = infos[token]            
+    #     # get point cloud
+    #     pc_path = info['path']
+    #     ref_obj = get_obj(hydra.utils.to_absolute_path(pc_path))
+    #     pc = ref_obj['lidars']['points_xyz'] # get point cloud
+    #     pc_feat = ref_obj['lidars']['points_feature'] # get point cloud features
+    #     pc = np.concatenate((pc, pc_feat), axis = 1)
+    #     # get transformation matrix
+    #     anno_path = info['anno_path']
+    #     ref_obj = get_obj(hydra.utils.to_absolute_path(anno_path))
+    #     pose = np.reshape(ref_obj['veh_to_global'], [4, 4])
+    #     # get ground truth ids for tracking
+    #     num_points_in_gt = np.array([ann['num_points'] for ann in ref_obj['objects']])
+    #     gt_global_ids = np.array([obj['name'] for obj in ref_obj['objects']])
+    #     gt_boxes = np.array([ann['box'] for ann in ref_obj['objects']]).reshape(-1, 9)
+    #     gt_names = np.array([TYPE_LIST[ann['label']] for ann in ref_obj['objects']])
+    #     # remove empty boxes
+    #     mask_not_zero = (num_points_in_gt >= 5).reshape(-1) #TODO: magic number !
+    #     gt_boxes = gt_boxes[mask_not_zero, :].astype(np.float32) 
+    #     gt_names = gt_names[mask_not_zero].astype(str)
+    #     gt_global_ids = gt_global_ids[mask_not_zero].astype(str)
+    #     num_points_in_gt = num_points_in_gt[mask_not_zero]
+    #     assert gt_boxes.shape[0] == gt_names.shape[0]
+    #     assert gt_global_ids.shape[0] == gt_names.shape[0]
+    #     # mask whitelist
+    #     mask_whitelist = np.array([True if label in WHITELIST else False for label in gt_names])
+    #     gt_boxes = gt_boxes[mask_whitelist, :].astype(np.float32) 
+    #     gt_names = gt_names[mask_whitelist].astype(str)
+    #     gt_global_ids = gt_global_ids[mask_whitelist].astype(str)
+    #     num_points_in_gt = num_points_in_gt[mask_whitelist]
+    #     assert gt_boxes.shape[0] == gt_names.shape[0]
+    #     assert gt_global_ids.shape[0] == gt_names.shape[0]
+    #     assert gt_names.shape[0] == num_points_in_gt.shape[0]
+    #     #create box_map
+    #     boxes_map = {}
+    #     for i in range(gt_boxes.shape[0]):
+    #         boxes_map[gt_global_ids[i]] = gt_boxes[i]
 
-        record['frame_id'] = frame_id
-        record['point_cloud'] = pc
-        record['boxes3d'] = gt_boxes
-        record['boxes_id'] = gt_global_ids
-        record['box_labels'] = gt_names
-        record['pose'] = pose # use transorm_box function
-        record['boxes_id_map'] = boxes_map # search boxes by unique id
-        record['num_points_in_gt'] = num_points_in_gt #TODO: for debugging, remove later
+    #     record['frame_id'] = frame_id
+    #     record['point_cloud'] = pc
+    #     record['boxes3d'] = gt_boxes
+    #     record['boxes_id'] = gt_global_ids
+    #     record['box_labels'] = gt_names
+    #     record['pose'] = pose # use transorm_box function
+    #     record['boxes_id_map'] = boxes_map # search boxes by unique id
+    #     record['num_points_in_gt'] = num_points_in_gt #TODO: for debugging, remove later
         
-        train_data_extract.append(record)
+    #     train_data_extract.append(record)
             
 
-    # create annotations and dataset
-    print(len(train_data_extract))
+    # # create annotations and dataset
+    # print(len(train_data_extract))
 
+    # create dataset and dataloader
+    from tracking.dataloader import TrackerDataset
+    ds = TrackerDataset(cfg.info_path)
+    dataloader = DataLoader(ds, 1, shuffle = False, num_workers=8)
     # create model
     from tracking.tracker_gnn import GNNMOT
-    model = GNNMOT()
+    model = GNNMOT().cuda()
 
-    optimzer = torch.optim.Adam(model.parameters())
+    optimzer = torch.optim.Adam([
+        {'params': model.appear_extractor.parameters()},
+        {'params': model.det_motion_extractor.parameters()},
+        {'params': model.track_motion_extractor.parameters()},
+        {'params': model.gnn_conv1.parameters()},
+        {'params': model.gnn_conv2.parameters()},
+        {'params': model.gnn_conv3.parameters()},
+        {'params': model.gnn_conv4.parameters()},
+        {'params': model.edge_regr.parameters(), 'lr': 0.001},
+    ],lr=0.01)
     
 
     # training loop
@@ -253,16 +267,24 @@ def main(cfg : DictConfig) -> None:
 
             # make sure adj matrix covers all gt connections in gt_affinity_matrix
             assert adj_matrix.shape == gt_affinity_matrix.shape
-            assert np.array_equal(np.multiply(gt_affinity_matrix, torch.from_numpy(adj_matrix.astype(int))), gt_affinity_matrix) == True
+            assert np.array_equal(torch.mul(gt_affinity_matrix, torch.from_numpy(adj_matrix.astype(int))), gt_affinity_matrix) == True
+            
+            det_pc_in_box = torch.tensor(det_pc_in_box).cuda()
+            assert det_pc_in_box.shape == torch.Size([N, 1024,5])
+            track_pc_in_box = torch.tensor(track_pc_in_box).cuda()
+            assert track_pc_in_box.shape == torch.Size([M, 1024,5])
+            
+            
+            
             
             # loss
-
             loss, affinity_matrix = model(
-                det_pc_in_box, det_data['boxes3d'], 
+                det_pc_in_box, 
+                torch.from_numpy(det_data['boxes3d']).float().cuda(),
                 track_pc_in_box, 
-                track_boxes3d, 
+                track_boxes3d.cuda(), 
                 graph_adj_matrix,
-                gt_affinity_matrix,
+                gt_affinity_matrix.cuda(),
             )
 
             assert affinity_matrix.shape == (N, M)
@@ -278,6 +300,7 @@ def main(cfg : DictConfig) -> None:
 
             # update optimizer
             optimzer.step()
+        torch.save(model.state_dict(), "epoch_{}".format(epoch))
     
     
 

@@ -5,6 +5,7 @@
 # read segment
 # create annotations
 import os, logging, pickle
+from torch._C import Value
 from torch.utils.data.dataloader import DataLoader
 
 from tqdm import tqdm
@@ -13,7 +14,7 @@ from omegaconf import DictConfig, OmegaConf
 from addict import Dict
 import numpy as np
 import torch
-
+from torch.utils.tensorboard import SummaryWriter
 
 from tracking.utils import reorganize_info, transform_box
 from viz_predictions import get_obj
@@ -45,6 +46,9 @@ def random_sampling(pc, num_sample, replace=None, return_choices=False):
 # A logger for this file
 log = logging.getLogger(__name__)
 
+# Writer will output to ./runs/ directory by default
+writer = SummaryWriter()
+
 @hydra.main(config_path="conf_tracking", config_name="config")
 def main(cfg : DictConfig) -> None:
     working_dir = os.getcwd()
@@ -62,6 +66,9 @@ def main(cfg : DictConfig) -> None:
     from tracking.tracker_gnn import GNNMOT
     model = GNNMOT().cuda()
 
+    print(model)
+
+
     optimzer = torch.optim.Adam([
         {'params': model.appear_extractor.parameters()},
         {'params': model.det_motion_extractor.parameters()},
@@ -76,7 +83,7 @@ def main(cfg : DictConfig) -> None:
 
     # training loop
     for epoch in range(cfg.max_epochs):
-        
+        base_step =  epoch*len(ds)
         for i, data_bundle in enumerate(dataloader):
             
             batch_size = data_bundle['det_boxes3d'].shape[0]
@@ -85,7 +92,7 @@ def main(cfg : DictConfig) -> None:
             N = data_bundle['det_boxes3d'][0].shape[0]
             M = data_bundle['track_boxes3d'][0].shape[0]
 
-            loss, affinity_matrix = model(
+            loss, aff_loss_value, triplet_loss_value, affinity_matrix = model(
                 data_bundle['det_pc_in_box'][0].cuda(), 
                 data_bundle['det_boxes3d'][0].cuda(), # torch.from_numpy(det_data['boxes3d']).float().cuda(),
                 data_bundle['track_pc_in_box'][0].cuda(), # track_pc_in_box, 
@@ -96,6 +103,11 @@ def main(cfg : DictConfig) -> None:
             assert affinity_matrix.shape == (N, M)
             # backward
             print(loss.item())
+            if loss.item() < 0:
+                raise ValueError("Negative loss value !!!!")
+            writer.add_scalar('Loss/train/total', loss.item(), base_step + i)
+            writer.add_scalar('Loss/train/triplet', triplet_loss_value, base_step + i)
+            writer.add_scalar('Loss/train/aff', aff_loss_value, base_step + i)
             loss.backward()
             # update optimizer
             optimzer.step()

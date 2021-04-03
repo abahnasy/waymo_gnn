@@ -148,7 +148,7 @@ class GNNMOT(nn.Module):
         N, M = gt_affinity_matrix.shape
         assert node_feats.shape == (N+M, 128)
         # triplet loss
-        triplet_loss = torch.empty(1).cuda()
+        triplet_loss = torch.zeros(1).cuda()
         for idx in range(M):
             track_obj_feat = node_feats[N+idx, :]
             assert track_obj_feat.shape == torch.Size([128]) # TODO: magic number
@@ -200,7 +200,15 @@ class GNNMOT(nn.Module):
         if len(not_matched_indices) != 0:
             aff_loss += torch.log(torch.exp(regr_affinity_matrix[:, not_matched_indices]).sum())
         
-        return aff_loss + triplet_loss
+        if aff_loss.item() < 0:
+            raise ValueError("aff negative loss !!")
+        if triplet_loss.item() < 0:
+            raise ValueError("triplet negative loss !!")
+        return {
+            'aff_loss': aff_loss.item(),
+            'triplet_loss': triplet_loss.item(),
+            'total_loss': aff_loss + triplet_loss
+        }
         
 
 
@@ -299,12 +307,9 @@ class GNNMOT(nn.Module):
         G.add_edges(src, dst)
         G = dgl.add_self_loop(G).to('cuda:0') # consider self features
         
-        try:
-            assert G.num_nodes() == graph_feat.shape[0]
-        except:
-            log.debug("number of graph nodes is {}".format(G.num_nodes()))
-            log.debug("shape of graph features is {}".format(graph_feat.shape))
-            exit()
+        
+        assert G.num_nodes() == graph_feat.shape[0]
+        
         
 
         
@@ -325,7 +330,7 @@ class GNNMOT(nn.Module):
         h = self.gnn_conv4(G, h)
         h = F.relu(h)
         # loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
-        loss = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        loss_dict = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         # TODO: Cosine Similarity, L2, MLP for constructing the affinity matrix
         # implement edge regression and return the matched indices !
         # consturct M x N Affinity Matrix
@@ -361,7 +366,7 @@ class GNNMOT(nn.Module):
                     # affinity_matrix[i, j] = 10 # invalid value
         # print(affinity_matrix.sum()); exit()
         if self.mode == 'train':
-            return loss, affinity_matrix
+            return loss_dict['total_loss'], loss_dict['aff_loss'], loss_dict['triplet_loss'],affinity_matrix
         else:
             raise ValueError("Inference mode is not ready yet !!")
             # matching assingment

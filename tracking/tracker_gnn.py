@@ -134,7 +134,7 @@ class GNNMOT(nn.Module):
         self.gnn_conv4 = EdgeConv(128, 128)
         self.edge_regr = EdgeRegressionMLP(input_size=128, hidden_size=64, output_size=1)
         self.mode = 'train'
-        self.triplet_loss_alpha = 5
+        self.triplet_loss_alpha = 10
         self.affinity_ce_loss_criterion = nn.CrossEntropyLoss()
         self.affinity_bce_loss_criterion = nn.BCELoss()
     
@@ -148,11 +148,12 @@ class GNNMOT(nn.Module):
         N, M = gt_affinity_matrix.shape
         assert node_feats.shape == (N+M, 128)
         # triplet loss
+        triplet_loss = torch.empty(1).cuda()
         for idx in range(M):
             track_obj_feat = node_feats[N+idx, :]
             assert track_obj_feat.shape == torch.Size([128]) # TODO: magic number
             if gt_affinity_matrix[:,idx].sum() == 0: #if match not found
-                log.debug("Not matched track !")
+                # log.debug("Not matched track !")
                 # minimize over the second term in the triplet loss function only !
                 triplet_2 = torch.min(torch.abs(track_obj_feat - node_feats[0:N, :]).sum(dim=1))
                 triplet_loss = torch.max(triplet_2 + torch.tensor(self.triplet_loss_alpha), 0)[0] #return value 
@@ -177,35 +178,28 @@ class GNNMOT(nn.Module):
                 
                 # print(type(matched_det_idx), matched_det_obj_feat.shape)
                 # print(unmatched_det_obj_feat.shape)
-                triplet_loss = torch.max(triplet_1 - triplet_2 - triplet_3 + torch.tensor(self.triplet_loss_alpha), 0)[0] # return value
+                triplet_loss += torch.max((triplet_1 - triplet_2 - triplet_3 + torch.tensor(self.triplet_loss_alpha)).clamp(min=0), 0)[0] # return value
         
         # affinity loss
         aff_loss = self.affinity_bce_loss_criterion(regr_affinity_matrix.view(-1,1).unsqueeze(0), gt_affinity_matrix.view(-1,1).unsqueeze(0).float())
         
         # affinity loss calculations 
         # calculations on NxM
-        try:
-            not_matched_indices = torch.where(gt_affinity_matrix.sum(dim=1))[0].tolist()
-            match_indices = [i for i in range(N) if i not in not_matched_indices]
-            if len(match_indices) != 0:
-                aff_loss += self.affinity_ce_loss_criterion(regr_affinity_matrix[match_indices, :], gt_affinity_matrix[match_indices,:].argmax(dim=1))
-            if len(not_matched_indices) != 0:
-                aff_loss += torch.log(torch.exp(regr_affinity_matrix[not_matched_indices,:]).sum())
-            # calculations on MxN
-            not_matched_indices = torch.where(gt_affinity_matrix.sum(dim=0))[0].tolist()
-            match_indices = [i for i in range(M) if i not in not_matched_indices]
-            if len(match_indices) != 0:
-                aff_loss += self.affinity_ce_loss_criterion(regr_affinity_matrix[:, match_indices].T, gt_affinity_matrix[:, match_indices].argmax(dim=0).T)
-            if len(not_matched_indices) != 0:
-                aff_loss += torch.log(torch.exp(regr_affinity_matrix[:, not_matched_indices]).sum())
-        except:
-            log.debug("NxM calculations")
-            log.debug(regr_affinity_matrix[match_indices, :].shape)
-            log.debug(gt_affinity_matrix[match_indices,:].shape)
-            log.debug("MxN calculations")
-            log.debug(regr_affinity_matrix[:, match_indices].shape)
-            log.debug(gt_affinity_matrix[:, match_indices].shape)
-
+        
+        not_matched_indices = torch.where(gt_affinity_matrix.sum(dim=1))[0].tolist()
+        match_indices = [i for i in range(N) if i not in not_matched_indices]
+        if len(match_indices) != 0:
+            aff_loss += self.affinity_ce_loss_criterion(regr_affinity_matrix[match_indices, :], gt_affinity_matrix[match_indices,:].argmax(dim=1))
+        if len(not_matched_indices) != 0:
+            aff_loss += torch.log(torch.exp(regr_affinity_matrix[not_matched_indices,:]).sum())
+        # calculations on MxN
+        not_matched_indices = torch.where(gt_affinity_matrix.sum(dim=0))[0].tolist()
+        match_indices = [i for i in range(M) if i not in not_matched_indices]
+        if len(match_indices) != 0:
+            aff_loss += self.affinity_ce_loss_criterion(regr_affinity_matrix[:, match_indices].T, gt_affinity_matrix[:, match_indices].argmax(dim=0).T)
+        if len(not_matched_indices) != 0:
+            aff_loss += torch.log(torch.exp(regr_affinity_matrix[:, not_matched_indices]).sum())
+        
         return aff_loss + triplet_loss
         
 
@@ -219,7 +213,7 @@ class GNNMOT(nn.Module):
                 # if affinity_matrix[i, j] != 0:
                     edges[c] = node_feats[j] - node_feats[i] # track - det features
                     c += 1
-        edges = self.edge_regr(edges)
+        edges = self.edge_regr(edges.cuda())
         return edges.reshape(N,M) # regressed affinity matrix
 
             
@@ -248,23 +242,29 @@ class GNNMOT(nn.Module):
         """
         log.debug("Entered Forward Function")
 
-        N = len(det_pc_in_box)
+        
+        
+        
+        N = det_pc_in_box.shape[0] #len(det_pc_in_box)
         M = len(track_pc_in_box)
         assert graph_adj_matrix.shape[0] == N+M
-        num_points = det_pc_in_box[0].shape[0] if len(det_pc_in_box) != 0 else track_pc_in_box[0].shape[0] # num points in pc subsampled
+        num_points = det_pc_in_box[0].shape[0] if N != 0 else track_pc_in_box[0].shape[0] # num points in pc subsampled
         
-        det_feats = np.zeros((N,5, num_points))
-        for i in range(N):
-            det_feats[i] = det_pc_in_box[i].T
-        det_feats = torch.from_numpy(det_feats).float()
+        det_feats = torch.transpose(det_pc_in_box,2,1)
+        
+        # det_feats = np.zeros((N,5, num_points))
+        # for i in range(N):
+        #     det_feats[i] = det_pc_in_box[i].T
+        # det_feats = torch.from_numpy(det_feats).float()
 
-        track_feats = np.zeros((M, 5, num_points))
-        for i in range(M):
-            track_feats[i] = track_pc_in_box[i].T
-        track_feats = torch.from_numpy(track_feats).float()
+        track_feats = torch.transpose(track_pc_in_box,2,1)
+        # track_feats = np.zeros((M, 5, num_points))
+        # for i in range(M):
+        #     track_feats[i] = track_pc_in_box[i].T
+        # track_feats = torch.from_numpy(track_feats).float()
 
         det_appear_feats = self.appear_extractor(det_feats)
-        det_motion_feats = self.det_motion_extractor(torch.from_numpy(det_boxes3d).float())
+        det_motion_feats = self.det_motion_extractor(det_boxes3d)
         track_appear_feats = self.appear_extractor(track_feats)
         track_motion_feats = self.track_motion_extractor(track_boxes3d.float())
 
@@ -297,7 +297,7 @@ class GNNMOT(nn.Module):
         G = dgl.DGLGraph()
         G.add_nodes(N+M)
         G.add_edges(src, dst)
-        G = dgl.add_self_loop(G) # consider self features
+        G = dgl.add_self_loop(G).to('cuda:0') # consider self features
         
         try:
             assert G.num_nodes() == graph_feat.shape[0]
@@ -312,16 +312,20 @@ class GNNMOT(nn.Module):
         h = self.gnn_conv1(G, graph_feat)
         h = F.relu(h)
         regr_affinity_matrix = self._compute_affinity_matrix(h, N, M)
-        loss = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        # loss = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        
         h = self.gnn_conv2(G, h)
         h = F.relu(h)
-        loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        # loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        
         h = self.gnn_conv3(G, h)
         h = F.relu(h)
-        loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        # loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        
         h = self.gnn_conv4(G, h)
         h = F.relu(h)
-        loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        # loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        loss = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         # TODO: Cosine Similarity, L2, MLP for constructing the affinity matrix
         # implement edge regression and return the matched indices !
         # consturct M x N Affinity Matrix
@@ -346,7 +350,7 @@ class GNNMOT(nn.Module):
                     edges[c] = h[j] - h[i] # track - det features
                     c += 1
 
-        afiinity_values = self.edge_regr(edges)
+        afiinity_values = self.edge_regr(edges.cuda())
         c = 0
         for i in range(N):
             for j in range(M):

@@ -13,8 +13,8 @@ class LSTMfeat(nn.Module):
 
     def forward(self, x):
         batch_size = x.shape[0]
-        hidden_state = torch.randn(self.n_layers, batch_size, self.hidden_dim)
-        cell_state = torch.randn(self.n_layers, batch_size, self.hidden_dim)
+        hidden_state = torch.randn(self.n_layers, batch_size, self.hidden_dim).cuda()
+        cell_state = torch.randn(self.n_layers, batch_size, self.hidden_dim).cuda()
         hidden = (hidden_state, cell_state)
         out, hidden = self.lstm_layer(x, hidden)
         # print(out)

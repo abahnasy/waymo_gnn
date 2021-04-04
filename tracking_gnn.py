@@ -9,10 +9,13 @@ from tqdm import tqdm
 import copy
 
 from waymo_dataset.waymo_common import _create_pd_detection
-from tracking.tracker_gnn import TrackerGNN
+from tracking.tracker_gnn import GNNTracker
 from tracking.utils import reorganize_info, sort_detections, label_to_name, transform_box
 
 
+import logging
+# A logger for this file
+log = logging.getLogger(__name__)
 
 def prepare_predictions(detections, infos):
     """ convert to Waymo coordinates
@@ -81,8 +84,9 @@ def prepare_predictions(detections, infos):
 def parse_args():
     parser = argparse.ArgumentParser(description="Tracking Evaluation")
     parser.add_argument("--work_dir", help="the dir to save logs and tracking results")
-    parser.add_argument("--checkpoint", help="the dir to checkpoint which the model read from")
+    parser.add_argument("--prediction_results", help="prediction output")
     parser.add_argument("--info_path", type=str)
+    parser.add_argument("--checkpoint", help="trained GNN Model")
     parser.add_argument("--max_age", type=int, default=3)
     parser.add_argument("--vehicle", type=float, default=5) 
     parser.add_argument("--pedestrian", type=float, default=5)  
@@ -104,13 +108,14 @@ def main():
     }
 
     # initialize tracker
-    tracker = TrackerGNN(
-        max_age=args.max_age,
-        max_dist=max_dist,
-        score_thresh=args.score_thresh,
+    tracker = GNNTracker(
+        ckpt_path = args.checkpoint,
+        max_dist = max_dist, # TODO: refactor later !
+        score_thresh = args.score_thresh,
+        max_age=args.max_age
     )
 
-    with open(args.checkpoint, 'rb') as f:
+    with open(args.prediction_results, 'rb') as f:
         predictions=pickle.load(f)
 
     with open(args.info_path, 'rb') as f:
@@ -126,11 +131,14 @@ def main():
     
 
     predictions = {}
+
+    
     
     
     
     # TODO: outer loop for no of epochs
     for i in tqdm(range(len_detections)):
+        log.info("===== Processing frame {} in the sequence =====".format(i))
         pred = sorted_detections[i]
         token = pred['token']
         
@@ -177,7 +185,8 @@ def main():
         # store box score 
         track_result['scores'] = detection['scores'][remained_box_ids]
 
-        predictions[token] = track_result 
+        predictions[token] = track_result
+        
 
     os.makedirs(args.work_dir, exist_ok=True)
     # save prediction files to args.work_dir 

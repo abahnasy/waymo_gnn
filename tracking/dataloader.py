@@ -119,7 +119,6 @@ class TrackerDataset(Dataset):
         return len(self.train_data_extract) - 1 # avoid getting the last frame
     
     def __getitem__(self, idx):
-        
         log.debug("Processing data extract {} and {}".format(idx, idx+1))
         # prepare detection data
         det_data = self.train_data_extract[idx+1]
@@ -220,11 +219,11 @@ class TrackerDataset(Dataset):
         assert np.array_equal(torch.mul(gt_affinity_matrix, torch.from_numpy(adj_matrix.astype(int))), gt_affinity_matrix) == True
         # except:
         #     log.debug("create visualizations for debuggings")
-        #     from utils.visualizations import write_points_ply_file, write_oriented_bbox
-        #     write_points_ply_file(det_data['point_cloud'][:,:3], 'det_debug_{}.ply'.format(det_data['frame_id']))
-        #     write_points_ply_file(track_data['point_cloud'][:,:3], 'track_debug_{}.ply'.format(track_data['frame_id']))
-        #     write_oriented_bbox(det_data['boxes3d'].reshape(-1,9), "det_debug_bboxs_{}.ply".format(det_data['frame_id']))
-        #     write_oriented_bbox(track_data['boxes3d'].reshape(-1,9), "track_debug_bboxs_{}.ply".format(track_data['frame_id']))
+        # from utils.visualizations import write_points_ply_file, write_oriented_bbox
+        # write_points_ply_file(det_data['point_cloud'][:,:3], 'det_debug_{}.ply'.format(det_data['frame_id']))
+        # write_points_ply_file(track_data['point_cloud'][:,:3], 'track_debug_{}.ply'.format(track_data['frame_id']))
+        # write_oriented_bbox(det_data['boxes3d'].reshape(-1,9), "det_debug_bboxs_{}.ply".format(det_data['frame_id']))
+        # write_oriented_bbox(track_data['boxes3d'].reshape(-1,9), "track_debug_bboxs_{}.ply".format(track_data['frame_id']))
         #     log.debug(adj_matrix.astype(int))
         #     log.debug(gt_affinity_matrix)
         #     raise ValueError("Error raised from tracking id: {} and det id {}".format(track_data['frame_id'], det_data['frame_id']))
@@ -242,7 +241,7 @@ class TrackerDataset(Dataset):
             'det_boxes3d': torch.from_numpy(det_data['boxes3d']).float(),
             'track_pc_in_box': track_pc_in_box, 
             'track_boxes3d': track_boxes3d, 
-            'graph_adj_matrix': graph_adj_matrix, # type: numpy
+            'graph_adj_matrix': torch.from_numpy(graph_adj_matrix), # type: numpy
             'gt_affinity_matrix': gt_affinity_matrix,
         }
         return data_bundle

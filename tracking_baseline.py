@@ -61,7 +61,7 @@ def main():
             tracker.reset()
             last_time_stamp = pred['timestamp']
 
-        time_lag = (pred['timestamp'] - last_time_stamp) 
+        time_lag = (pred['timestamp'] - last_time_stamp)
         last_time_stamp = pred['timestamp']
 
         current_det = pred['global_boxs']
@@ -72,7 +72,7 @@ def main():
 
         for item in outputs:
             if item['active'] == 0:
-                continue 
+                continue
             
             box_ids.append(item['box_id'])
             tracking_ids.append(item['tracking_id'])
@@ -82,10 +82,10 @@ def main():
 
         remained_box_ids = np.array(box_ids)
 
-        track_result = {} 
+        track_result = {}
 
         # store box id 
-        track_result['tracking_ids']= np.array(tracking_ids)   
+        track_result['tracking_ids']= np.array(tracking_ids)
 
         # store box parameter 
         track_result['box3d_lidar'] = detection['box3d_lidar'][remained_box_ids]
@@ -96,7 +96,7 @@ def main():
         # store box score 
         track_result['scores'] = detection['scores'][remained_box_ids]
 
-        predictions[token] = track_result 
+        predictions[token] = track_result
 
     os.makedirs(args.work_dir, exist_ok=True)
     # save prediction files to args.work_dir 

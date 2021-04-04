@@ -35,7 +35,7 @@
     ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_training/segment-*.tfrecord'  --root_path './data/Waymo/train/'```
 
   * validation set 
-    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/val/'```
+    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path './data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/val/'```
 
   * testing set 
     ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/test/'```
@@ -69,13 +69,21 @@
 ```python3 ./test.py --work_dir work_dirs/dry_run --checkpoint work_dirs/dry_run/latest.pth --speed_test```
 
 # generate ground truth for validation set
-```python3 waymo_open_dataset/waymo_common.py --info_path data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl --result_path data/Waymo/ --gt```
+```python3 waymo_dataset/waymo_common.py --info_path data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl --result_path data/Waymo/ --gt```
 
 
 
-# From inside Waymo Folder to evaluate predicitons !
-```bazel-bin/waymo_open_dataset/metrics/tools/compute_detection_metrics_main /home/bahnasy/waymo_gnn/work_dirs/dry_run/detection_pred.bin /home/bahnasy/waymo_gnn/data/Waymo/gt_preds.bin```
+# evaluate predicitons (Detections) !
+```python cmd_waymo_eval_kit.py evaluate_detections```
 
+# evaluate predicitons (Tracking) !
+```python cmd_waymo_eval_kit.py evaluate_tracking```
+
+# Tracking baseline
+```python tracking_baseline.py --work_dir=./output_tracking --checkpoint=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl```
+
+# tracking GNN
+```python tracking_gnn.py --work_dir=./output_tracking --checkpoint=./outputs/2021-04-03/19-17-41/epoch_56 --prediction_results=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl```
 
 # Launch Tensorboard
 ```python3 -m tensorboard.main --logdir work_dirs/ --port=6006```

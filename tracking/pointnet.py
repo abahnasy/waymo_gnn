@@ -94,13 +94,13 @@ class PointNetCustom(nn.Module):
         self.conv3 = nn.Conv1d(32, 64, 1)
         self.conv4 = nn.Conv1d(64, 128, 1)
         self.conv5 = nn.Conv1d(128, 256, 1)
-        self.conv6 = nn.Conv1d(256, 64, 1)
+        self.conv6 = nn.Conv1d(256, 128, 1)
         self.bn1 = nn.BatchNorm1d(16)
         self.bn2 = nn.BatchNorm1d(32)
         self.bn3 = nn.BatchNorm1d(64)
         self.bn4 = nn.BatchNorm1d(128)
         self.bn5 = nn.BatchNorm1d(256)
-        self.bn6 = nn.BatchNorm1d(64)
+        self.bn6 = nn.BatchNorm1d(128)
     
     def forward(self, x):
         x = F.relu(self.bn1(self.conv1(x)))
@@ -110,7 +110,7 @@ class PointNetCustom(nn.Module):
         x = F.relu(self.bn5(self.conv5(x)))
         x = self.bn6(self.conv6(x))
         x = torch.max(x, 2, keepdim=True)[0]
-        x = x.view(-1, 64)
+        x = x.view(-1, 128)
         return x
     
 class PointNetfeat(nn.Module):

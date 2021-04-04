@@ -69,7 +69,7 @@ def main(cfg : DictConfig) -> None:
     print(model)
 
 
-    optimzer = torch.optim.Adam([
+    optimizer = torch.optim.Adam([
         {'params': model.appear_extractor.parameters()},
         {'params': model.det_motion_extractor.parameters()},
         {'params': model.track_motion_extractor.parameters()},
@@ -77,14 +77,16 @@ def main(cfg : DictConfig) -> None:
         {'params': model.gnn_conv2.parameters()},
         {'params': model.gnn_conv3.parameters()},
         {'params': model.gnn_conv4.parameters()},
-        {'params': model.edge_regr.parameters(), 'lr': 0.001},
-    ],lr=0.01)
+        {'params': model.edge_regr.parameters(), 'lr': 0.01},
+    ],lr=0.0001)
     
 
     # training loop
     for epoch in range(cfg.max_epochs):
         base_step =  epoch*len(ds)
         for i, data_bundle in enumerate(dataloader):
+
+            optimizer.zero_grad()
             
             batch_size = data_bundle['det_boxes3d'].shape[0]
             assert batch_size == 1, "currrently, only one item in the batch is processed"
@@ -92,12 +94,24 @@ def main(cfg : DictConfig) -> None:
             N = data_bundle['det_boxes3d'][0].shape[0]
             M = data_bundle['track_boxes3d'][0].shape[0]
 
-            loss, aff_loss_value, triplet_loss_value, affinity_matrix = model(
+            # writer.add_graph(
+            #     model, 
+            #     [
+            #         data_bundle['det_pc_in_box'][0].cuda(), 
+            #         data_bundle['det_boxes3d'][0].cuda(), # torch.from_numpy(det_data['boxes3d']).float().cuda(),
+            #         data_bundle['track_pc_in_box'][0].cuda(), # track_pc_in_box, 
+            #         data_bundle['track_boxes3d'][0].cuda(), # track_boxes3d.cuda(), 
+            #         data_bundle['graph_adj_matrix'][0].cuda(), # graph_adj_matrix,
+            #         data_bundle['gt_affinity_matrix'][0].cuda(), # gt_affinity_matrix.cuda(),
+            #     ]
+            # )
+            # exit()
+            loss, aff_loss, triplet_loss, affinity_matrix = model(
                 data_bundle['det_pc_in_box'][0].cuda(), 
                 data_bundle['det_boxes3d'][0].cuda(), # torch.from_numpy(det_data['boxes3d']).float().cuda(),
                 data_bundle['track_pc_in_box'][0].cuda(), # track_pc_in_box, 
                 data_bundle['track_boxes3d'][0].cuda(), # track_boxes3d.cuda(), 
-                data_bundle['graph_adj_matrix'][0], # graph_adj_matrix,
+                data_bundle['graph_adj_matrix'][0].cuda(), # graph_adj_matrix,
                 data_bundle['gt_affinity_matrix'][0].cuda(), # gt_affinity_matrix.cuda(),
             )
             assert affinity_matrix.shape == (N, M)
@@ -106,12 +120,12 @@ def main(cfg : DictConfig) -> None:
             if loss.item() < 0:
                 raise ValueError("Negative loss value !!!!")
             writer.add_scalar('Loss/train/total', loss.item(), base_step + i)
-            writer.add_scalar('Loss/train/triplet', triplet_loss_value, base_step + i)
-            writer.add_scalar('Loss/train/aff', aff_loss_value, base_step + i)
+            writer.add_scalar('Loss/train/triplet', triplet_loss.item(), base_step + i)
+            writer.add_scalar('Loss/train/aff', aff_loss.item(), base_step + i)
             loss.backward()
             # update optimizer
-            optimzer.step()
-        torch.save(model.state_dict(), "epoch_{}".format(epoch))
+            optimizer.step()
+        torch.save(model.state_dict(), "epoch_{}.pt".format(epoch))
     
     
 

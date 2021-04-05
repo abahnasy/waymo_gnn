@@ -138,7 +138,7 @@ def main():
     
     # TODO: outer loop for no of epochs
     for i in tqdm(range(len_detections)):
-        log.info("===== Processing frame {} in the sequence =====".format(i))
+        # log.info("===== Processing frame {} in the sequence =====".format(i))
         pred = sorted_detections[i]
         token = pred['token']
         

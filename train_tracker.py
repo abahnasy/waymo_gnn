@@ -4,7 +4,7 @@
 # steps:
 # read segment
 # create annotations
-import os, logging, pickle
+import os, logging, pickle, time
 from torch._C import Value
 from torch.utils.data.dataloader import DataLoader
 
@@ -19,6 +19,10 @@ from torch.utils.tensorboard import SummaryWriter
 from tracking.utils import reorganize_info, transform_box
 from viz_predictions import get_obj
 from utils.visualizations import get_corners_from_labels_array
+
+from tools.profiler import AdvancedProfiler
+prof = AdvancedProfiler("profiler_ouput.txt")
+
 
 def in_hull(p, hull):
     from scipy.spatial import Delaunay
@@ -60,7 +64,7 @@ def main(cfg : DictConfig) -> None:
     # create dataset and dataloader
     from tracking.dataloader import TrackerDataset
     ds = TrackerDataset(cfg.info_path)
-    dataloader = DataLoader(ds, 1, shuffle = False, num_workers=1)
+    dataloader = DataLoader(ds, batch_size=1, shuffle = False, num_workers=8)
     
     # create model
     from tracking.tracker_gnn import GNNMOT
@@ -85,6 +89,12 @@ def main(cfg : DictConfig) -> None:
     for epoch in range(cfg.max_epochs):
         base_step =  epoch*len(ds)
         for i, data_bundle in enumerate(dataloader):
+            print("DEBUG: memory allocated: ", torch.cuda.memory_allocated() / torch.cuda.max_memory_allocated())
+            
+            
+            # if i == 10:
+                # prof.describe()
+                # exit()
 
             optimizer.zero_grad()
             
@@ -93,7 +103,7 @@ def main(cfg : DictConfig) -> None:
             # loss
             N = data_bundle['det_boxes3d'][0].shape[0]
             M = data_bundle['track_boxes3d'][0].shape[0]
-
+            
             # writer.add_graph(
             #     model, 
             #     [
@@ -106,14 +116,29 @@ def main(cfg : DictConfig) -> None:
             #     ]
             # )
             # exit()
+            # with prof.profile("forward pass"):
+            tick = time.time()
+            data_bundle = {
+                'det_pc_in_box':data_bundle['det_pc_in_box'][0].cuda(),
+                'det_boxes3d':data_bundle['det_boxes3d'][0].cuda(),
+                'track_pc_in_box':data_bundle['track_pc_in_box'][0].cuda(),
+                'track_boxes3d':data_bundle['track_boxes3d'][0].cuda(),
+                'init_aff_matrix':data_bundle['init_aff_matrix'][0].cuda(),
+                'gt_affinity_matrix':data_bundle['gt_affinity_matrix'][0].cuda()
+            }
+            
+            
             loss, aff_loss, triplet_loss, affinity_matrix = model(
-                data_bundle['det_pc_in_box'][0].cuda(), 
-                data_bundle['det_boxes3d'][0].cuda(), # torch.from_numpy(det_data['boxes3d']).float().cuda(),
-                data_bundle['track_pc_in_box'][0].cuda(), # track_pc_in_box, 
-                data_bundle['track_boxes3d'][0].cuda(), # track_boxes3d.cuda(), 
-                data_bundle['graph_adj_matrix'][0].cuda(), # graph_adj_matrix,
-                data_bundle['gt_affinity_matrix'][0].cuda(), # gt_affinity_matrix.cuda(),
+                data_bundle['det_pc_in_box'], 
+                data_bundle['det_boxes3d'], # torch.from_numpy(det_data['boxes3d']).float().cuda(),
+                data_bundle['track_pc_in_box'], # track_pc_in_box, 
+                data_bundle['track_boxes3d'], # track_boxes3d.cuda(), 
+                data_bundle['init_aff_matrix'], # graph_adj_matrix,
+                data_bundle['gt_affinity_matrix'], # gt_affinity_matrix.cuda(),
             )
+            
+            
+            print("Forwad and Loss time: ", time.time() - tick)
             assert affinity_matrix.shape == (N, M)
             # backward
             print(loss.item())
@@ -122,9 +147,22 @@ def main(cfg : DictConfig) -> None:
             writer.add_scalar('Loss/train/total', loss.item(), base_step + i)
             writer.add_scalar('Loss/train/triplet', triplet_loss.item(), base_step + i)
             writer.add_scalar('Loss/train/aff', aff_loss.item(), base_step + i)
+            
             loss.backward()
             # update optimizer
             optimizer.step()
+            
+            
+
+            # # prints currently alive Tensors and Variables
+            # import gc
+            # log.info("==== End of Iteration Memory debugging ====")
+            # for obj in gc.get_objects():
+            #     try:
+            #         if torch.is_tensor(obj) or (hasattr(obj, 'data') and torch.is_tensor(obj.data)):
+            #             log.info("{}, {}".format(type(obj), obj.size()))
+            #     except:
+            #         pass
         torch.save(model.state_dict(), "epoch_{}.pt".format(epoch))
     
     

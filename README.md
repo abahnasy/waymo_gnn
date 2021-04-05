@@ -51,12 +51,6 @@
   python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split val --nsweeps=2
   python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split test --nsweeps=2
   ```
-# train
-``` waymo_dataset/create_data.py waymo_data_prep --root_path=./data/Waymo --split train --nsweeps=1 --sub_sampled=1.0 ```
-# val
-```python3 waymo_dataset/create_data.py waymo_data_prep --root_path=./data/Waymo --split val --nsweeps=1 --sub_sampled=0.1```
-
-
 
 # train cmds
 ```python3 ./train.py```
@@ -66,7 +60,8 @@
 ```python3 ./train.py model=two_stage```
 
 # test cmds
-```python3 ./test.py --work_dir work_dirs/dry_run --checkpoint work_dirs/dry_run/latest.pth --speed_test```
+* adjust ```checkpoint``` in ```./conf/configy.yaml``` to refer the trained model checkpoint
+* run the prediction ```python3 ./test.py```
 
 # generate ground truth for validation set
 ```python3 waymo_dataset/waymo_common.py --info_path data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl --result_path data/Waymo/ --gt```
@@ -83,7 +78,7 @@
 ```python tracking_baseline.py --work_dir=./output_tracking --checkpoint=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl```
 
 # tracking GNN
-```python tracking_gnn.py --work_dir=./output_tracking --checkpoint=./outputs/2021-04-03/19-17-41/epoch_56 --prediction_results=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl```
+```python3 tracking_gnn.py --work_dir=./output_tracking --checkpoint=./outputs/2021-04-05/04-37-43/epoch_50.pt --prediction_results=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl```
 
 # Launch Tensorboard
 ```python3 -m tensorboard.main --logdir work_dirs/ --port=6006```

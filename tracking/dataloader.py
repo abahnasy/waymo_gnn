@@ -191,12 +191,13 @@ class TrackerDataset(Dataset):
         assert dist.shape == (N,M)
         dist = np.sqrt(dist) # absolute distance in meter
         # invalid links
-        adj_matrix = ((dist > max_diff.reshape(N, 1)) + (det_data['box_labels'].reshape(N, 1) != track_data['box_labels'].reshape(1, M))) > 0
+        init_aff_matrix = ((dist > max_diff.reshape(N, 1)) + (det_data['box_labels'].reshape(N, 1) != track_data['box_labels'].reshape(1, M))) > 0
         # log.debug(adj_matrix)
-        adj_matrix =  ~np.array(adj_matrix) #valid links
-        graph_adj_matrix = np.zeros((N+M, N+M)) # det first then tracks
-        graph_adj_matrix[0:N,N::] = adj_matrix
-        graph_adj_matrix[N::,0:N] = adj_matrix.T
+        init_aff_matrix =  ~np.array(init_aff_matrix) #valid links
+        init_aff_matrix = init_aff_matrix.astype(np.int)
+        # graph_adj_matrix = np.zeros((N+M, N+M)) # det first then tracks
+        # graph_adj_matrix[0:N,N::] = adj_matrix
+        # graph_adj_matrix[N::,0:N] = adj_matrix.T
         
         # ===== model forward + loss ====== #
         # transform_box(det_data['boxes3d'], det_data['pose']) try global box data # TODO
@@ -212,11 +213,13 @@ class TrackerDataset(Dataset):
         # log.debug(np.multiply(gt_affinity_matrix, adj_matrix.astype(int)))
 
         # make sure adj matrix covers all gt connections in gt_affinity_matrix
-        assert adj_matrix.shape == gt_affinity_matrix.shape
+        assert init_aff_matrix.shape == gt_affinity_matrix.shape
         # log.debug(adj_matrix.astype(int))
         # log.debug(gt_affinity_matrix)
         # try:
-        assert np.array_equal(torch.mul(gt_affinity_matrix, torch.from_numpy(adj_matrix.astype(int))), gt_affinity_matrix) == True
+        # print(gt_affinity_matrix)
+        # print(init_aff_matrix)
+        assert np.array_equal(torch.mul(gt_affinity_matrix, torch.from_numpy(init_aff_matrix.astype(int))), gt_affinity_matrix) == True
         # except:
         #     log.debug("create visualizations for debuggings")
         # from utils.visualizations import write_points_ply_file, write_oriented_bbox
@@ -241,7 +244,7 @@ class TrackerDataset(Dataset):
             'det_boxes3d': torch.from_numpy(det_data['boxes3d']).float(),
             'track_pc_in_box': track_pc_in_box, 
             'track_boxes3d': track_boxes3d, 
-            'graph_adj_matrix': torch.from_numpy(graph_adj_matrix), # type: numpy
-            'gt_affinity_matrix': gt_affinity_matrix,
+            'init_aff_matrix': torch.from_numpy(init_aff_matrix), #[N,M]
+            'gt_affinity_matrix': gt_affinity_matrix, #[N,M]
         }
         return data_bundle

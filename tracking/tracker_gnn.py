@@ -1,5 +1,5 @@
 import logging
-import copy
+import copy, time
 
 import numpy as np
 import torch
@@ -63,8 +63,6 @@ log = logging.getLogger(__name__)
 
 
 
-def debug(msg): #TODO: should be removed later
-    print("DEBUG: {}".format(msg))
 
 def in_hull(p, hull):
     from scipy.spatial import Delaunay
@@ -151,7 +149,7 @@ class GNNTracker():
 
         N = len(processed_det_boxes)
         M = len(self.tracks[-1])
-        print("current number of tracks = {}".format(M))
+        
 
         # if 'tracking' in processed_det_boxes[0]:
         #     dets = np.array(
@@ -170,18 +168,18 @@ class GNNTracker():
 
 
         if len(tracks) > 0:  # NOT FIRST FRAME
-            debug("NOT THE FIRST TIME")
+            
             dist = (((tracks.reshape(1, -1, 2) - dets.reshape(-1, 1, 2)) ** 2).sum(axis=2))  # N x M
             dist = np.sqrt(dist) # absolute distance in meter
 
             # invalid links
-            adj_matrix = ((dist > max_diff.reshape(N, 1)) + (item_cat.reshape(N, 1) != track_cat.reshape(1, M))) > 0
-            adj_matrix =  ~np.array(adj_matrix) #valid links
+            init_aff_matrix = ((dist > max_diff.reshape(N, 1)) + (item_cat.reshape(N, 1) != track_cat.reshape(1, M))) > 0
+            init_aff_matrix =  ~np.array(init_aff_matrix) #valid links
             # print(adj_matrix.sum())
             # adj_matrix = ((dist < max_diff.reshape(N, 1))) > 0 # nearby points according to velocity approximation
-            graph_adj_matrix = np.zeros((N+M, N+M)) # det first then tracks
-            graph_adj_matrix[0:N,N::] = adj_matrix
-            graph_adj_matrix[N::,0:N] = adj_matrix.T
+            # graph_adj_matrix = np.zeros((N+M, N+M)) # det first then tracks
+            # graph_adj_matrix[0:N,N::] = adj_matrix
+            # graph_adj_matrix[N::,0:N] = adj_matrix.T
             # print(graph_adj_matrix.sum()); exit()
             det_pc_in_box = [det['pc_in_box'] for det in processed_det_boxes] # N
             det_boxes3d = np.array([box['box3d'] for box in processed_det_boxes])
@@ -212,22 +210,25 @@ class GNNTracker():
             assert track_boxes3d.shape[2] == 9
             
             # forward function, pass tensors on GPU
-            
-            matched_indices = self.model(
-                torch.tensor(det_pc_in_box).cuda(), 
-                torch.from_numpy(det_boxes3d).cuda(), 
-                torch.tensor(track_pc_in_box).cuda(), 
-                track_boxes3d.cuda(), 
-                torch.from_numpy(graph_adj_matrix).cuda(), 
-                gt_affinity_matrix = None # not needed in eval mode
-            )
+            tick = time.time()
+            with torch.no_grad():
+                matched_indices = self.model(
+                    torch.tensor(det_pc_in_box).cuda(), 
+                    torch.from_numpy(det_boxes3d).cuda(), 
+                    torch.tensor(track_pc_in_box).cuda(), 
+                    track_boxes3d.cuda(), 
+                    torch.from_numpy(init_aff_matrix).cuda(), 
+                    gt_affinity_matrix = None # not needed in eval mode
+                )
+            print(" ====== time consumed for inference is {} ====== ".format(time.time() - tick))
+            torch.cuda.empty_cache()
 
         else:  # first few frame
             assert M == 0
             matched_indices = np.array([], np.int32).reshape(-1, 2)
 
         unmatched_dets = [d for d in range(dets.shape[0]) if not (d in matched_indices[:, 0])] #indicies
-        debug("Lengh unmatches is {}".format(len(unmatched_dets)))
+        
 
         unmatched_tracks = [d for d in range(tracks.shape[0]) if not (d in matched_indices[:, 1])] #indices
         
@@ -236,7 +237,7 @@ class GNNTracker():
         ret = []
         # for matched detections assign the id of the matched track, add to return
         for m in matches:
-            debug("processing matches")
+            
             track = processed_det_boxes[m[0]] # m[0] det_idx # m[1] track_idx
             track['tracking_id'] = self.tracks[-1][m[1]]['tracking_id']      
             track['age'] = 1
@@ -245,7 +246,7 @@ class GNNTracker():
 
         # for unmatched detections, assign a new ID, add to return also.
         for i in unmatched_dets:
-            debug("processing unmatched det")
+            
             track = processed_det_boxes[i]
 
             if track['score'] > self.score_thresh:
@@ -255,13 +256,12 @@ class GNNTracker():
                 track['age'] = 1
                 track['active'] =  1
                 ret.append(track)
-            else:
-                print("rejected for low threshold")
+            
 
         # still store unmatched tracks if its age doesn't exceed max_age, however, we shouldn't output 
         # the object in current frame 
         for i in unmatched_tracks:
-            debug("processing unmatched tracks")
+            
             track = self.tracks[-1][i] # work on the latest tracks
             if track['age'] < self.max_age:
                 track['age'] += 1

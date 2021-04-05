@@ -87,7 +87,7 @@ class STNkd(nn.Module):
         return x
 
 class PointNetCustom(nn.Module):
-    def __init__(self, global_feat = True, feature_transform = False):
+    def __init__(self, global_feat = True, feature_transform = False, output_dim = 128):
         super(PointNetCustom, self).__init__()
         self.conv1 = nn.Conv1d(5, 16, 1)
         self.conv2 = nn.Conv1d(16, 32, 1)

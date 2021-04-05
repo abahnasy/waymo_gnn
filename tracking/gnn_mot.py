@@ -8,9 +8,10 @@ import torch.nn.functional as F
 import dgl
 from dgl.nn import EdgeConv
 
-from tracking.pointnet import PointNetfeat, PointNetCustom
-from tracking.lstm import LSTMfeat
-from tracking.mlp import TwoLayersMLP, EdgeRegressionMLP
+from tracking.models.appearance_feature_extractors.pointnet import PointNetfeat, PointNetCustom
+from tracking.models.motion_feature_extractors.lstm import LSTMfeat
+from tracking.models.motion_feature_extractors.mlp import TwoLayersMLP
+from tracking.models.edge_regressors.edge_regressors_mlp import EdgeRegressionMLP
 from utils.bbox import box_np_ops
 
 import logging
@@ -95,7 +96,7 @@ class GNNMOT(nn.Module):
                 triplet_loss += torch.max((triplet_1 - triplet_2 - triplet_3 + torch.tensor(self.triplet_loss_alpha)).clamp(min=0), 0)[0] # return value
         
         # affinity loss
-        aff_loss = self.affinity_bce_loss_criterion(regr_affinity_matrix.view(-1,1).unsqueeze(0), gt_affinity_matrix.view(-1,1).unsqueeze(0).float())
+        aff_loss =  self.affinity_bce_loss_criterion(regr_affinity_matrix.view(-1,1).unsqueeze(0), gt_affinity_matrix.view(-1,1).unsqueeze(0).float())
         
         # affinity loss calculations 
         # calculations on NxM
@@ -103,16 +104,16 @@ class GNNMOT(nn.Module):
         not_matched_indices = torch.where(gt_affinity_matrix.sum(dim=1))[0].tolist()
         match_indices = [i for i in range(N) if i not in not_matched_indices]
         if len(match_indices) != 0:
-            aff_loss += self.affinity_ce_loss_criterion(regr_affinity_matrix[match_indices, :], gt_affinity_matrix[match_indices,:].argmax(dim=1))
+            aff_loss +=  self.affinity_ce_loss_criterion(regr_affinity_matrix[match_indices, :], gt_affinity_matrix[match_indices,:].argmax(dim=1))
         if len(not_matched_indices) != 0:
-            aff_loss += torch.log(torch.exp(regr_affinity_matrix[not_matched_indices,:]).sum())
+            aff_loss +=  torch.log(torch.exp(regr_affinity_matrix[not_matched_indices,:]).sum())
         # calculations on MxN
         not_matched_indices = torch.where(gt_affinity_matrix.sum(dim=0))[0].tolist()
         match_indices = [i for i in range(M) if i not in not_matched_indices]
         if len(match_indices) != 0:
-            aff_loss += self.affinity_ce_loss_criterion(regr_affinity_matrix[:, match_indices].T, gt_affinity_matrix[:, match_indices].argmax(dim=0).T)
+            aff_loss +=  self.affinity_ce_loss_criterion(regr_affinity_matrix[:, match_indices].T, gt_affinity_matrix[:, match_indices].argmax(dim=0).T)
         if len(not_matched_indices) != 0:
-            aff_loss += torch.log(torch.exp(regr_affinity_matrix[:, not_matched_indices]).sum())
+            aff_loss +=  torch.log(torch.exp(regr_affinity_matrix[:, not_matched_indices]).sum())
         
         if aff_loss.item() < 0:
             raise ValueError("aff negative loss !!")
@@ -261,16 +262,18 @@ class GNNMOT(nn.Module):
         # === Graph Convolutions === #
         h = self.gnn_conv1(G, graph_feat)
         h = F.relu(h)
-        # regr_affinity_matrix = self._compute_affinity_matrix(h, N, M)
-        # loss = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        regr_affinity_matrix = self._compute_affinity_matrix(h, N, M)
+        loss_dict_layer_1 = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         
         h = self.gnn_conv2(G, h)
         h = F.relu(h)
-        # loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        regr_affinity_matrix = self._compute_affinity_matrix(h, N, M)
+        loss_dict_layer_2 = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         
         h = self.gnn_conv3(G, h)
         h = F.relu(h)
-        # loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        regr_affinity_matrix = self._compute_affinity_matrix(h, N, M)
+        loss_dict_layer_3 = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         
         h = self.gnn_conv4(G, h)
         h = F.relu(h)
@@ -278,7 +281,7 @@ class GNNMOT(nn.Module):
         print("Timer: Main forward pass through edge convolution {}".format(time.time() - t)); t = time.time()
         regr_affinity_matrix = self._compute_affinity_matrix(h, N, M)
         print("Timer: regressing affinity matrix {}".format(time.time() - t)); t = time.time()
-        # loss += self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+        loss_dict_layer_4 = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
         
         # init_affinity_matrix = graph_adj_matrix[0:N, N:N+M]
         valid_regr_affinity_matrix = torch.mul(init_aff_matrix, regr_affinity_matrix)
@@ -290,8 +293,11 @@ class GNNMOT(nn.Module):
         # eliminate invalid positions from regressed affinity matrix
         assert init_aff_matrix.shape == regr_affinity_matrix.shape
         if self.mode == 'train':
-            loss_dict = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
-            return loss_dict['total_loss'], loss_dict['aff_loss'].detach(), loss_dict['triplet_loss'].detach(),valid_regr_affinity_matrix
+            # loss_dict = self._compute_layer_loss(h, regr_affinity_matrix, gt_affinity_matrix)
+            return loss_dict_layer_1['total_loss'] + loss_dict_layer_2['total_loss'] + loss_dict_layer_3['total_loss'] + loss_dict_layer_4['total_loss'], \
+                loss_dict_layer_1['aff_loss'].detach() + loss_dict_layer_2['aff_loss'].detach() + loss_dict_layer_3['aff_loss'].detach() + loss_dict_layer_4['aff_loss'].detach(),  \
+                    loss_dict_layer_1['triplet_loss'].detach() + loss_dict_layer_2['triplet_loss'].detach() + loss_dict_layer_3['triplet_loss'].detach() + loss_dict_layer_4['triplet_loss'].detach(), \
+                        valid_regr_affinity_matrix
         else:
             # matching assingment
             matched_indices = []

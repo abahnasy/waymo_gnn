@@ -1,2 +1,44 @@
 info_path: data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl
-max_epochs: 1
+max_epochs: 100
+num_workers: 8
+batch_size: 1 #WARNING: keep it to one, current implementation supports only batch_size of 1
+feature_extractor: appearance+motion # options: [appearance+motion, appearance, motion]
+feature_interaction: True # takes the regression from the last layer of the graph
+feature_size: 256 # final concatenated feature size
+model_configurations:
+  appearance_extractor:
+    type: PointNetCustom
+    cfg:
+      global_feat: True
+      feature_transform: False
+      output_dim: 128
+  tracks_motion_extractor:
+    type: LSTMfeat
+    cfg:
+      input_dim: 9
+      hidden_dim: 128
+      n_layers: 2
+  detection_motion_extractor:
+    type: TwoLayersMLP
+    cfg:
+      input_size: 9
+      hidden_size: 64
+      output_size: 128
+  graph_conv:
+    type: EdgeConvOp # options: [EdgeConv]
+    cfg:
+      feature_size: 128
+      num_gnn_layers: 4
+      activation: relu
+      # SAGEConv configurations
+      aggregator_type: pool # [mean, gcn, pool, lstm]  
+      feat_drop: 0.0
+      # GATConv configurations
+      gat_conv_num_head: 3
+      gat_conv_feat_drop: 0.0
+      gat_conv_attn_drop: 0.0
+  edge_regression: 
+    type: mlp # options: [CosineSimilarity, mlp, negL2distance]
+    cfg:
+      size: [256,64,1]
+

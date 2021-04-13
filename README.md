@@ -1,45 +1,40 @@
 # Waymo Tracking
 
-### TODO
-- [ ] requirements.txt
-- [ ] Docker file
-- [ ] List prerequisites
-- [ ] header comments
+#### Requirements
+
+- Linux
+- Python >= 3.6
+- PyTorch >= 1.4
+- CUDA >= 10.0
+- CMake >= 3.13.2
 
 
-### Steps
+## Installation Steps
 
-* create conda env
-* install conda dependencies # TODO
-* TODO: GCloud access and gcp cmd tools
-* TODO: reuqired installations !
-* build cuda layers of dcn and iou3d_nms `bash setup.sh`
-* alias to data folder
-* run the downloader to download in the alias folder
+- Sign up for waymo and accept the terms of use
+- install GCloud command line tools and use the same credentials for Waymo dataset
+- install Conda
+- create conda env from requirement.yml to install dependences
 * install MinkowskiEngine
   * follow the steps mentioned in: ``` https://github.com/NVIDIA/MinkowskiEngine```
 * install open_waymo_dataset library to extract data
 ```pip install waymo-open-dataset-tf-2-3-0```
+* build cuda layers of dcn and iou3d_nms `bash setup.sh`
+* run the downloader to download data splits ``` python3 download_tfrecords.py --split 'training'  --root_path './data/Waymo' ```
 
-### CMD Lines
-
-* alias data folder
-
-* download data
-
-``` python3 download_tfrecords.py --split 'training'  --root_path './data/Waymo' ```
+## Data Preparations
 
 * preprocess data, extract annotaions and point clouds for every frame into piclke file
+  ```
+  # train set 
+  CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_training/segment-*.tfrecord'  --root_path './data/Waymo/train/'```
 
-  * train set 
-    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_training/segment-*.tfrecord'  --root_path './data/Waymo/train/'```
+  # validation set 
+  CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path './data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/val/'
 
-  * validation set 
-    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path './data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/val/'```
-
-  * testing set 
-    ```CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/test/'```
-
+  # testing set 
+  CUDA_VISIBLE_DEVICES=-1 python3 waymo_dataset/waymo_converter.py --tfrecord_path 'data/Waymo/tfrecord_validation/segment-*.tfrecord'  --root_path './data/Waymo/test/'
+  ```
 * create info files
   ```
   # One Sweep Infos 
@@ -52,7 +47,30 @@
   python waymo_dataset/create_data.py waymo_data_prep --root_path=data/Waymo --split test --nsweeps=2
   ```
 
-# train cmds
+## Folder Structure
+```
+.
++-- _config.yml
++-- _drafts
+|   +-- begin-with-the-crazy-ideas.textile
+|   +-- on-simplicity-in-technology.markdown
++-- _includes
+|   +-- footer.html
+|   +-- header.html
++-- _layouts
+|   +-- default.html
+|   +-- post.html
++-- _posts
+|   +-- 2007-10-29-why-every-programmer-should-play-nethack.textile
+|   +-- 2009-04-26-barcamp-boston-4-roundup.textile
++-- _data
+|   +-- members.yml
++-- _site
++-- index.html
+```
+
+## train cmds
+There are two main scripts for training
 ```python3 ./train.py```
 
 * for training the second stage
@@ -60,7 +78,7 @@
 ```python3 ./train.py model=two_stage```
 
 # test cmds
-* adjust ```checkpoint``` in ```./conf/configy.yaml``` to refer the trained model checkpoint
+* adjust ```checkpoint``` in ```./conf/config.yaml``` to refer the trained model checkpoint
 * run the prediction ```python3 ./test.py```
 
 # generate ground truth for validation set

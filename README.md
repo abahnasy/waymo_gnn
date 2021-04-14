@@ -1,6 +1,6 @@
 # Waymo Tracking
 
-#### Requirements
+## Requirements
 
 - Linux
 - Python >= 3.6
@@ -21,8 +21,23 @@
 ```pip install waymo-open-dataset-tf-2-3-0```
 * build cuda layers of dcn and iou3d_nms `bash setup.sh`
 * run the downloader to download data splits ``` python3 download_tfrecords.py --split 'training'  --root_path './data/Waymo' ```
+* install Waymo dataset evaluation kit. Follow the steps mentioned in https://github.com/waymo-research/waymo-open-dataset/blob/master/docs/quick_start.md
 
-## Data Preparations
+- optional: sparse convolutions are implemented using MinkowskiEngine and spconv library. we adopted MinkowskiEngine due to its efficiency and spped. in case you are interested in running spconv. you need to follow these steps
+  ```
+  sudo apt-get install libboost-all-dev
+  git clone https://github.com/traveller59/spconv.git --recursive
+  cd spconv && git checkout 7342772
+  python setup.py bdist_wheel
+  cd ./dist && pip install *
+  ```
+  - then apply the following fixes:
+    - fix build error in spconv https://github.com/pytorch/extension-script/issues/6
+    - solve cuda compiler error https://github.com/traveller59/spconv/issues/211
+    - fix cudnn version check while building spconv https://github.com/pytorch/pytorch/issues/40965
+
+
+## Data Preparation
 
 * preprocess data, extract annotaions and point clouds for every frame into piclke file
   ```
@@ -50,88 +65,79 @@
 ## Folder Structure
 ```
 .
-+-- _config.yml
-+-- _drafts
-|   +-- begin-with-the-crazy-ideas.textile
-|   +-- on-simplicity-in-technology.markdown
-+-- _includes
-|   +-- footer.html
-|   +-- header.html
-+-- _layouts
-|   +-- default.html
-|   +-- post.html
-+-- _posts
-|   +-- 2007-10-29-why-every-programmer-should-play-nethack.textile
-|   +-- 2009-04-26-barcamp-boston-4-roundup.textile
-+-- _data
-|   +-- members.yml
-+-- _site
-+-- index.html
+├── cmd_waymo_eval_kit.py     # script to run Waymo evaluation kit !
+├── conf                      # configurations for the detector
+├── conf_tracking             # configurations for the tracker
+├── data
+├── download_tfrecords.py
+├── outputs
+├── runs
+├── setup.sh
+├── test.py
+├── tracking
+├── tracking_baseline.py       # inference script for the baseline tracker
+├── tracking_gnn.py            # inference script for the GNN Tracker
+├── train.py                   # training script for the detector
+├── train_tracker.py           # training script for the tracker
+├── trainer_utils.py
+└── viz_predictions.py
 ```
 
-## train cmds
-There are two main scripts for training
-```python3 ./train.py```
-
-* for training the second stage
-
-```python3 ./train.py model=two_stage```
-
-# test cmds
+## Training and Evaluation commands
+### Detector
+All configurations for the Detector is saved in `./conf` folder inside `*.yml` files.
+#### Train
+- ```python3 ./train.py```
+#### Evaluate
 * adjust ```checkpoint``` in ```./conf/config.yaml``` to refer the trained model checkpoint
-* run the prediction ```python3 ./test.py```
+* run the prediction
+  ```
+  python ./test.py
+  ```
+* generate Ground Truth data for the validation set
+  ```
+  python waymo_dataset/waymo_common.py --info_path data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl --result_path data/Waymo/ --gt
+  ```
+* evaluate predicitons (Detections) !
+  ```
+  python cmd_waymo_eval_kit.py evaluate_detections
+  ```
+  before running the evaluation cmd, open `cmd_waymo_eval_kit.py` and insert the correct links the prediction file and ground truth file generated from the model and the current used validation dataset.
 
-# generate ground truth for validation set
-```python3 waymo_dataset/waymo_common.py --info_path data/Waymo/infos_val_01sweeps_filter_zero_gt.pkl --result_path data/Waymo/ --gt```
+### Tracker
+#### Train
+All configurations for the Detector is saved in `./conf_tracking` folder inside `*.yml` files.
+- ```python ./train_tracker.py ```
+#### Evaluate
+* Tracking baseline: this is the baseline tracker which uses velocity cues and greedy matching to assign new detections to the current tracks
+  ```
+  python tracking_baseline.py --work_dir=./output_tracking --checkpoint=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl
+  ```
+  provide the arguments for the current checkpoint resulted from training and dataset info file generated when preparing the data.
+
+* Tracking GNN
+  * adjust ```checkpoint``` in ```./conf/config.yaml``` to refer the trained model checkpoint
+  ```
+  python3 tracking_gnn.py --work_dir=./output_tracking --checkpoint=./outputs/2021-04-05/04-37-43/epoch_50.pt --prediction_results=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl
+  ```
+  provide the arguments for the current checkpoint resulted from training and dataset info file generated when preparing the data.
 
 
+* evaluate predicitons (Tracking) !
+  ```
+  python cmd_waymo_eval_kit.py evaluate_tracking 
+  ```
+  before running the evaluation cmd, open `cmd_waymo_eval_kit.py` and insert the correct links the prediction file and ground truth file generated from the model and the current used validation dataset.
 
-# evaluate predicitons (Detections) !
-```python cmd_waymo_eval_kit.py evaluate_detections```
+before running the evaluation cmd, open `cmd_waymo_eval_kit.py` and insert the correct links the prediction file and ground truth file generated from the model and the current used validation dataset.
 
-# evaluate predicitons (Tracking) !
-```python cmd_waymo_eval_kit.py evaluate_tracking```
-
-# Tracking baseline
-```python tracking_baseline.py --work_dir=./output_tracking --checkpoint=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl```
-
-# tracking GNN
-```python3 tracking_gnn.py --work_dir=./output_tracking --checkpoint=./outputs/2021-04-05/04-37-43/epoch_50.pt --prediction_results=./ckpts/epoch_36/prediction.pkl --info_path=./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl```
 
 # Launch Tensorboard
 ```python3 -m tensorboard.main --logdir work_dirs/ --port=6006```
 
 
-# Tasks
-
-## Important and Urgent
-- [x] implement a validation loop
-- [x] add tensorboard 
-- [x] extract prediction bin file for local evaluation
-- [ ] augment waymo evaluation metrics into training pipeline via python binding to call evaluation APIs
-
-## Important and Not Urgent
-- [x] implement resume from
-- [x] implement load from
-- [x] generate info for mini dataset
-- [ ] adopt hydra to manage the messy world of configurations !!!
-
-## Not Important and Urgent
-
-## Not Important and not Urgent
-- [x] numba jit warning ! (suppressed)
-- [ ] check Kornia, DGL libraries
-- [ ] refactor times by implementing a specific class !
-
-## Backlog
-- [ ] implement the top view viz from matplotlib
-- [ ] add train option for mini dataset
-- [ ] remove multi task implememntation
-- [ ] ~~change viz to mayavi `REF: https://github.com/DapengFeng/waymo-toolkit`~~
-- [ ] in depth documentation `REF: https://github.com/Jossome/Waymo-open-dataset-document`
-- [ ] open3d viz `https://github.com/caizhongang/waymo_kitti_converter/blob/master/tools/dataloader_visualizer.py`
-
 # Acknowledgment
-* `https://github.com/poodarchu/Det3D`
-* `https://github.com/open-mmlab/mmdetection`
-* `https://github.com/open-mmlab/OpenPCDet`
+* https://github.com/poodarchu/Det3D
+* https://github.com/open-mmlab/mmdetection
+* https://github.com/open-mmlab/OpenPCDet
+* 

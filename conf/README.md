@@ -1,0 +1,1 @@
+For non numerical configurations (for example, Different Backbone, etc..) the possible configurations are listed as comments beside the configurations parameters.

@@ -1,4 +1,4 @@
-# Waymo Tracking
+# Waymo Detection and Tracking
 
 ## Requirements
 
@@ -140,4 +140,4 @@ before running the evaluation cmd, open `cmd_waymo_eval_kit.py` and insert the c
 * https://github.com/poodarchu/Det3D
 * https://github.com/open-mmlab/mmdetection
 * https://github.com/open-mmlab/OpenPCDet
-* 
+* https://github.com/tianweiy/CenterPoint

@@ -23,6 +23,7 @@ from utils.visualizations import get_corners_from_labels_array
 from tools.profiler import AdvancedProfiler
 prof = AdvancedProfiler("profiler_ouput.txt")
 
+from tracking.models import *
 
 def in_hull(p, hull):
     from scipy.spatial import Delaunay
@@ -68,7 +69,7 @@ def main(cfg : DictConfig) -> None:
     
     # create model
     from tracking.tracker_gnn import GNNMOT
-    model = GNNMOT().cuda()
+    model = GNNMOT(cfg.model_configurations).cuda()
 
     print(model)
 
@@ -77,10 +78,11 @@ def main(cfg : DictConfig) -> None:
         {'params': model.appear_extractor.parameters()},
         {'params': model.det_motion_extractor.parameters()},
         {'params': model.track_motion_extractor.parameters()},
-        {'params': model.gnn_conv1.parameters()},
-        {'params': model.gnn_conv2.parameters()},
-        {'params': model.gnn_conv3.parameters()},
-        {'params': model.gnn_conv4.parameters()},
+        {'params': model.graph_conv.parameters()},
+        # {'params': model.gnn_conv1.parameters()},
+        # {'params': model.gnn_conv2.parameters()},
+        # {'params': model.gnn_conv3.parameters()},
+        # {'params': model.gnn_conv4.parameters()},
         {'params': model.edge_regr.parameters(), 'lr': 0.01},
     ],lr=0.0001)
     

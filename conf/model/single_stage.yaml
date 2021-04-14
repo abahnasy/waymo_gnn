@@ -6,11 +6,11 @@ model:
     reader:
       type: VoxelFeatureExtractorV3
       cfg:
-        num_input_features: 5
+        num_input_features: 6
     backbone:
-      type: MinkowskiSpMiddleResNetFHD
+      type: MinkowskiSpMiddleResNetFHD # SpMiddleResNetFHD
       cfg:
-        num_input_features: 5
+        num_input_features: 6
         ds_factor: 8
     neck:
       type: RPN
@@ -30,12 +30,13 @@ model:
             class_names: ['VEHICLE', 'PEDESTRIAN', 'CYCLIST']
         dataset: waymo
         weight: 2
-        code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+        code_weights: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 0.2, 0.2, 1.0, 1.0]
         common_heads: 
           reg: [2, 2]
           height: [1, 2]
           dim: [3, 2]
           rot: [2, 2] # (output_channel, num_conv)
+          vel: [2,2]
     test_cfg:
       post_center_limit_range: [-80, -80, -10.0, 80, 80, 10.0]
       nms:

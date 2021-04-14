@@ -54,7 +54,10 @@ class GATConvOp(nn.Module):
     def forward(self, graph, feats):
         feats = self.attentions(graph, feats)
         feats = feats.reshape(graph.num_nodes(), -1)
+        feats = self.activation(feats)
         feats = self.out_att(graph, feats)
+        feats = feats.squeeze(1)
+        feats = self.activation(feats)
         return feats
 
 if __name__ == '__main__':
@@ -65,4 +68,5 @@ if __name__ == '__main__':
     G = dgl.graph(data = ([1,2,3,4,5], [6,7,8,9,0]), num_nodes=10)
     G = dgl.add_self_loop(G)
     output = model(G, h)
+    print(output.shape)
     print(output.min(), output.max())

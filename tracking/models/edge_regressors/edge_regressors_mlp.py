@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
 
+from tracking.models.registry import EDGE_REGRESSORS
+
+@EDGE_REGRESSORS.register_module
 class EdgeRegressionMLP(nn.Module):
     
     def __init__(self, input_size, hidden_size, output_size):

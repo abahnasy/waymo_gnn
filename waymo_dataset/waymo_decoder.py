@@ -188,7 +188,7 @@ def extract_objects(laser_labels, global_from_ref_rotation):
 
     objects.append({
         'id': object_id,
-        'name': label.id,
+        'name': label.id, # global box id for tracking
         'label': category_label,
         'box': np.array([box.center_x, box.center_y, box.center_z,
                          box.length, box.width, box.height, ref_velocity[0], 

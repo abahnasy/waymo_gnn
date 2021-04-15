@@ -8,7 +8,7 @@ model:
       cfg:
         num_input_features: 6
     backbone:
-      type: MinkowskiSpMiddleResNetFHD # SpMiddleResNetFHD
+      type: SpMiddleResNetFHD #MinkowskiSpMiddleResNetFHD # SpMiddleResNetFHD
       cfg:
         num_input_features: 6
         ds_factor: 8

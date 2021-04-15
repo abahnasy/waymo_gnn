@@ -21,9 +21,11 @@ class SAGEConvOp(nn.Module):
         activation='relu',
         loss_every_layer = True,
         edge_regression = None,
+        mode = 'train',
         **kwargs
         ):
         super(SAGEConvOp, self).__init__()
+        self.mode = mode
         self.feature_size = feature_size
         self.num_gnn_layers = num_gnn_layers
         self.loss_every_layer = loss_every_layer
@@ -56,22 +58,25 @@ class SAGEConvOp(nn.Module):
             embeddings = self.activation(embeddings)
             if self.loss_every_layer:
                 pred_aff_mat = self._regress_aff_mat(embeddings, N, M)
-                aff_layers_loss += self.affinity_loss(pred_aff_mat, gt_aff_mat)
-                triplet_layers_loss += self.triplet_loss(embeddings, gt_aff_mat)
+                if self.mode == 'train':
+                    aff_layers_loss += self.affinity_loss(pred_aff_mat, gt_aff_mat)
+                    triplet_layers_loss += self.triplet_loss(embeddings, gt_aff_mat)
         
         # calculate Loss based on final layer if loss every layer is not True
         if not self.loss_every_layer:
             pred_aff_mat = self._regress_aff_mat(embeddings, N, M)
-            aff_layers_loss += self.affinity_loss(pred_aff_mat, gt_aff_mat)
-            triplet_layers_loss += self.triplet_loss(embeddings, gt_aff_mat)
+            if self.mode == 'train':
+                aff_layers_loss += self.affinity_loss(pred_aff_mat, gt_aff_mat)
+                triplet_layers_loss += self.triplet_loss(embeddings, gt_aff_mat)
         
-        # Return Loss/Total Loss Tensor
-        ret_dict['total_loss'] = triplet_layers_loss + aff_layers_loss
-        ret_dict['triplet_loss'] = triplet_layers_loss.detach()
-        ret_dict['aff_loss'] = aff_layers_loss.detach()
-
-        return ret_dict, pred_aff_mat
-
+        if self.mode == 'train':
+            # Return Loss/Total Loss Tensor
+            ret_dict['total_loss'] = triplet_layers_loss + aff_layers_loss
+            ret_dict['triplet_loss'] = triplet_layers_loss.detach()
+            ret_dict['aff_loss'] = aff_layers_loss.detach()
+            return ret_dict, pred_aff_mat
+        else:
+            return pred_aff_mat
         # for layer in self.graph_conv_layers:
         #     feats = layer(graph, feats)
         #     feats = self.activation(feats)

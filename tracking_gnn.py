@@ -12,6 +12,8 @@ from waymo_dataset.waymo_common import _create_pd_detection
 from tracking.tracker_gnn import GNNTracker
 from tracking.utils import reorganize_info, sort_detections, label_to_name, transform_box
 
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 import logging
 # A logger for this file
@@ -81,44 +83,46 @@ def prepare_predictions(detections, infos):
     sorted_ret_list = sort_detections(ret_list)
     return sorted_ret_list, detection_results
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Tracking Evaluation")
-    parser.add_argument("--work_dir", help="the dir to save logs and tracking results")
-    parser.add_argument("--prediction_results", help="prediction output")
-    parser.add_argument("--info_path", type=str)
-    parser.add_argument("--checkpoint", help="trained GNN Model")
-    parser.add_argument("--max_age", type=int, default=3)
-    parser.add_argument("--vehicle", type=float, default=5) 
-    parser.add_argument("--pedestrian", type=float, default=5)  
-    parser.add_argument("--cyclist", type=float, default=5)  
-    parser.add_argument("--score_thresh", type=float, default=0.75)
+# def parse_args():
+#     parser = argparse.ArgumentParser(description="Tracking Evaluation")
+#     parser.add_argument("--work_dir", help="the dir to save logs and tracking results")
+#     parser.add_argument("--prediction_results", help="prediction output")
+#     parser.add_argument("--info_path", type=str)
+#     parser.add_argument("--checkpoint", help="trained GNN Model")
+#     parser.add_argument("--max_age", type=int, default=3)
+#     parser.add_argument("--vehicle", type=float, default=5) 
+#     parser.add_argument("--pedestrian", type=float, default=5)  
+#     parser.add_argument("--cyclist", type=float, default=5)  
+#     parser.add_argument("--score_thresh", type=float, default=0.75)
 
-    args = parser.parse_args()
+#     args = parser.parse_args()
 
-    return args
+#     return args
 
-def main():
-    args = parse_args()
+@hydra.main(config_path="conf_tracking", config_name="eval_config")
+def main(cfg : DictConfig) -> None:
+    # args = parse_args()
     print('Deploy OK')
 
     max_dist = {
-        'VEHICLE': args.vehicle,
-        'PEDESTRIAN': args.pedestrian,
-        'CYCLIST': args.cyclist
+        'VEHICLE': cfg.vehicle,
+        'PEDESTRIAN': cfg.pedestrian,
+        'CYCLIST': cfg.cyclist
     }
 
     # initialize tracker
     tracker = GNNTracker(
-        ckpt_path = args.checkpoint,
+        ckpt_path = hydra.utils.to_absolute_path(cfg.checkpoint),
         max_dist = max_dist, # TODO: refactor later !
-        score_thresh = args.score_thresh,
-        max_age=args.max_age
+        score_thresh = cfg.score_thresh,
+        max_age=cfg.max_age,
+        model_cfg = cfg.model_configurations
     )
 
-    with open(args.prediction_results, 'rb') as f:
+    with open(hydra.utils.to_absolute_path(cfg.prediction_results), 'rb') as f:
         predictions=pickle.load(f)
 
-    with open(args.info_path, 'rb') as f:
+    with open(hydra.utils.to_absolute_path(cfg.info_path), 'rb') as f:
         infos=pickle.load(f)
         infos = reorganize_info(infos) #dictionary indexed by token 
 
@@ -188,12 +192,12 @@ def main():
         predictions[token] = track_result
         
 
-    os.makedirs(args.work_dir, exist_ok=True)
+    os.makedirs(hydra.utils.to_absolute_path(cfg.work_dir), exist_ok=True)
     # save prediction files to args.work_dir 
-    _create_pd_detection(predictions, infos, args.work_dir, tracking=True)
+    _create_pd_detection(predictions, infos, hydra.utils.to_absolute_path(cfg.work_dir), tracking=True)
 
-    result_path = os.path.join(args.work_dir, 'tracking_pred.bin')
-    gt_path = os.path.join(args.work_dir, '../gt_preds.bin')
+    result_path = os.path.join(hydra.utils.to_absolute_path(cfg.work_dir), 'tracking_pred.bin')
+    gt_path = os.path.join(hydra.utils.to_absolute_path(cfg.work_dir), '../gt_preds.bin')
 
     print("Use Waymo devkit or online server to evaluate the result")
     print("After building the devkit, you can use the following command")

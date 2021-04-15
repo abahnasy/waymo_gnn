@@ -17,10 +17,12 @@ class GATConvOp(nn.Module):
         gat_conv_num_head = 3,
         gat_conv_feat_drop =  0.0,
         gat_conv_attn_drop =  0.0,
+        mode = 'train',
         **kwargs
         ):
 
         super(GATConvOp, self).__init__()
+        self.mode = mode
         self.feature_size = feature_size
         self.num_gnn_layers = num_gnn_layers
         

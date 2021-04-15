@@ -10,57 +10,6 @@ from utils.visualizations import get_corners_from_labels_array
 # A logger for this file
 log = logging.getLogger(__name__)
 
-# class LSTMBuffer():
-#     """
-#     buffer: {
-#         track_id: [5,9] 
-#     }
-#     """
-#     def __init__(self, maxsize = 5):
-#         #key: tracking_id, value: [[],[],[],[],[]] latest T tracks
-#         self.buffer = {} # Every item [N, 9]
-#         self.max_size = maxsize
-#         self.current_size = 0
-
-#     def push_tracks(self, tracks):
-#         """ tracks: [M,9]
-#         """
-        
-#         for track in tracks:
-#             tracking_id = track['tracking_id']
-#             if tracking_id in self.buffer.keys():
-#                 self.buffer[tracking_id] = self.buffer[tracking_id][1::]
-#                 self.buffer[tracking_id].append(track['box3d'])
-#             else:
-#                 # for the first time
-#                 self.buffer[tracking_id] = [track['box3d'] for i in range(5)] # repeat five times # TODO: magic number !
-    
-#     def prepare_gnn_tracking_input(self, tracks):
-#         ret = np.zeros((len(tracks), self.max_size, 9)) # TODO: magic number !
-#         for i in range(len(tracks)):
-#             tracking_id = tracks[i]['tracking_id']
-#             ret[i] = self.buffer[tracking_id]
-#         return ret
-
-
-
-
-# class TrackerGNN(object):
-#     def __init__(self, max_age=0, max_dist={}, score_thresh=0.1):
-#         self.max_age = max_age
-#         self.WAYMO_CLS_VELOCITY_ERROR = max_dist 
-#         self.WAYMO_TRACKING_NAMES = WAYMO_TRACKING_NAMES
-#         self.score_thresh = score_thresh 
-#         self.gnn_matcher = GNNMOT()
-        
-#         self.reset()
-
-
-#     def reset(self):
-#         self.id_count = 0
-#         self.tracks = []
-#         self.lstm_buffer = LSTMBuffer(maxsize=5) # remember the last five tracks
-
 
 
 
@@ -92,8 +41,8 @@ def random_sampling(pc, num_sample, replace=None, return_choices=False):
 
 class GNNTracker():
     
-    def __init__(self, ckpt_path, max_dist, score_thresh, max_age) -> None:
-        self.model = GNNMOT(mode='eval').cuda()
+    def __init__(self, ckpt_path, max_dist, score_thresh, max_age, model_cfg) -> None:
+        self.model = GNNMOT(model_cfg).cuda()
         self.model.load_state_dict(torch.load(ckpt_path))
         log.info("Trained GNN Model loaded successfully !")
         self.max_age = max_age

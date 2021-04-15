@@ -1,0 +1,56 @@
+work_dir: ./output_tracking
+checkpoint: ./outputs/2021-04-14/22-46-15/epoch_1.pt
+prediction_results: ./ckpts/epoch_36/prediction.pkl
+info_path: ./data/Waymo/infos_val_02sweeps_filter_zero_gt.pkl
+max_age: 3
+vehicle: 5
+pedestrian: 5
+cyclist: 5
+score_thresh: 0.75
+feature_extractor: appearance+motion # options: [appearance+motion, appearance, motion]
+feature_interaction: True # takes the regression from the last layer of the graph
+feature_size: 256 # final concatenated feature size
+model_configurations:
+  mode: eval
+  appearance_extractor:
+    type: PointNetCustom
+    cfg:
+      global_feat: True
+      feature_transform: False
+      output_dim: 128
+  tracks_motion_extractor:
+    type: LSTMfeat
+    cfg:
+      input_dim: 9
+      hidden_dim: 128
+      n_layers: 2
+  detection_motion_extractor:
+    type: TwoLayersMLP
+    cfg:
+      input_size: 9
+      hidden_size: 64
+      output_size: 128
+  graph_conv:
+    type: EdgeConvOp # options: [EdgeConvOp, AGNNConvOp, GATConvOp, GraphConvNetOp, SAGEConvOp, AffinityAttentionOp, MessagePassingOp]
+    cfg:
+      mode: ${model_configurations.mode}
+      feature_size: 256
+      num_gnn_layers: 4
+      activation: relu
+      # SAGEConv configurations
+      aggregator_type: pool # [mean, gcn, pool, lstm]  
+      feat_drop: 0.0
+      # GATConv configurations
+      gat_conv_num_head: 3
+      gat_conv_feat_drop: 0.0
+      gat_conv_attn_drop: 0.0
+      # AGNNConv configurations
+      agnn_conv_init_beta: 1.0
+      agnn_conv_learn_beta: True
+      edge_regression: 
+        type: EdgeRegressionMLP # options: [CosineSimilarity, EdgeRegressionMLP, negL2distance]
+        cfg:
+          input_size: 256
+          hidden_size: 64
+          output_size: 1
+

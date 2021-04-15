@@ -129,8 +129,6 @@ All configurations for the Detector is saved in `./conf_tracking` folder inside 
   ```
   before running the evaluation cmd, open `cmd_waymo_eval_kit.py` and insert the correct links the prediction file and ground truth file generated from the model and the current used validation dataset.
 
-before running the evaluation cmd, open `cmd_waymo_eval_kit.py` and insert the correct links the prediction file and ground truth file generated from the model and the current used validation dataset.
-
 
 # Launch Tensorboard
 ```python3 -m tensorboard.main --logdir work_dirs/ --port=6006```

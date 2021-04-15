@@ -65,7 +65,7 @@ class GNNMOT(nn.Module):
         track_pc_in_box, 
         track_boxes3d, 
         init_aff_matrix, 
-        gt_affinity_matrix
+        gt_affinity_matrix # None in case of eval
     ):
         """
         Args:
@@ -161,8 +161,10 @@ class GNNMOT(nn.Module):
         
         assert G.num_nodes() == graph_feat.shape[0]
         
-
-        losses_dict, regr_affinity_matrix = self.graph_conv(G, graph_feat, gt_affinity_matrix, N, M)
+        if self.mode =='train':
+            losses_dict, regr_affinity_matrix = self.graph_conv(G, graph_feat, gt_affinity_matrix, N, M)
+        else:
+            regr_affinity_matrix = self.graph_conv(G, graph_feat, gt_affinity_matrix, N, M)
          # init_affinity_matrix = graph_adj_matrix[0:N, N:N+M]
         valid_regr_affinity_matrix = torch.mul(init_aff_matrix, regr_affinity_matrix)
         xs,ys= torch.where(valid_regr_affinity_matrix == 0)
